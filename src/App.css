@@ -1,0 +1,5 @@
+/* App-specific styles can be added here */
+
+body > #root {
+  display: contents;
+}

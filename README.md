@@ -17,7 +17,7 @@ Article URL → AI extracts text → AI generates image → AI renders video →
 - **Database**: Supabase (PostgreSQL)
 - **Orchestration**: n8n (workflows)
 - **Video**: Kling AI 3.0
-- **Images**: DALL-E
+- **Video Stitching**: Fal.ai
 - **Audio**: ElevenLabs
 
 ## Quick Start

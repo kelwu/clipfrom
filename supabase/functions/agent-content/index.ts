@@ -7,6 +7,37 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const AD_DOMAINS = /doubleclick\.net|googlesyndication|amazon-adsystem|adnxs|pubmatic|outbrain|taboola|adblade|criteo|moatads|rubiconproject|openx\.net|sharethrough|tribalfusion|yieldmanager|advertising\.com/i;
+const AD_CLASSES = /\b(ad|ads|advertisement|banner|sponsor|promo|popup|leaderboard)\b/i;
+
+function extractArticleImages(html: string): string[] {
+  const images: string[] = [];
+
+  // og:image first — publisher-chosen representative image
+  const ogMatch =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (ogMatch?.[1] && !ogMatch[1].startsWith("data:")) images.push(ogMatch[1]);
+
+  // Body images from article/main content areas
+  const contentMatch = html.match(/<(?:article|main|section)[^>]*>([\s\S]*?)<\/(?:article|main|section)>/i);
+  const searchArea = contentMatch?.[1] ?? html;
+
+  const imgRe = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = imgRe.exec(searchArea)) !== null && images.length < 6) {
+    const src = m[1];
+    const tag = m[0];
+    if (src.startsWith("data:")) continue;
+    if (AD_DOMAINS.test(src)) continue;
+    if (AD_CLASSES.test(tag)) continue;
+    if (/\/(pixel|track|beacon|imp)\b/i.test(src)) continue;
+    if (!images.includes(src)) images.push(src);
+  }
+
+  return [...new Set(images)].slice(0, 5);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -30,11 +61,14 @@ Deno.serve(async (req) => {
 
     // Fetch article text if URL was given
     let articleText = content;
+    let articleImages: string[] = [];
     if (type === "url") {
       const resp = await fetch(content, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipFrom/1.0)" },
       });
       const html = await resp.text();
+      // Extract images before stripping tags
+      articleImages = extractArticleImages(html);
       // Extract main content: remove boilerplate then grab densest text block
       const cleaned = html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
@@ -89,6 +123,8 @@ Hard rules:
 - Present tense, active voice, sentence case (not ALL CAPS)
 - No hashtags, no emojis, no ellipses as a crutch
 - Each caption must flow naturally from the one before it — this is a story, not 5 separate tweets
+- Each caption must introduce NEW information not already stated. If you find yourself rephrasing something a previous caption already said, stop and find a different angle. A viewer watching all 5 should learn something new at each beat.
+- At most ONE caption may start with the main subject's name (company, person, or product). The other 4 must open differently: a number, a verb, a consequence, a rhetorical pivot, or a surprising detail. Think like a screenwriter, not a journalist.
 
 Rules for description:
 - 150–200 words, conversational and direct
@@ -108,19 +144,20 @@ Rules for description:
       description: string;
     };
 
-    // Write captions to DB
+    // Write captions (and article images if any) to DB
     await supabase
       .from("ai_generations")
       .update({
         caption_options: data.caption_options,
         description: data.description,
         status: "captions_ready",
+        ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
       })
       .eq("project_id", project_id);
 
     // Return captions directly — frontend can navigate immediately
     return new Response(
-      JSON.stringify({ ok: true, project_id, caption_options: data.caption_options, description: data.description }),
+      JSON.stringify({ ok: true, project_id, caption_options: data.caption_options, description: data.description, article_images: articleImages }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

@@ -49,10 +49,10 @@ Deno.serve(async (req) => {
         .eq("id", callingUser.id);
     }
 
-    // Fetch captions
+    // Fetch captions + article images
     const { data: gen, error } = await supabaseAdmin
       .from("ai_generations")
-      .select("id, caption_options")
+      .select("id, caption_options, article_images")
       .eq("project_id", project_id)
       .single();
 
@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
     const captions: string[] = Array.isArray(gen.caption_options)
       ? gen.caption_options
       : Object.values(gen.caption_options);
+
+    const articleImages: string[] = Array.isArray(gen.article_images) ? gen.article_images : [];
 
     // Hand off to Railway pipeline (fire and forget — Railway responds 202 immediately)
     const pipelineRes = await fetch(`${RAILWAY_URL}/generate-video`, {
@@ -77,6 +79,7 @@ Deno.serve(async (req) => {
         videoSource,
         user_email,
         secret: PIPELINE_SECRET,
+        ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
       }),
     });
 

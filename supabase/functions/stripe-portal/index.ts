@@ -47,7 +47,8 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ url: portalSession.url }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
-    console.error("stripe-portal error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("stripe-portal error:", msg);
+    return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

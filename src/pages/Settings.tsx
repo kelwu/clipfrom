@@ -13,7 +13,17 @@ interface Profile {
   credits_remaining: number | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  preferred_voice_id: string | null;
 }
+
+const VOICES = [
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "Female", tone: "Calm & clear", color: "#a78bfa" },
+  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh",   gender: "Male",   tone: "Deep & warm",  color: "#60a5fa" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",  gender: "Female", tone: "Soft & expressive", color: "#f472b6" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam",   gender: "Male",   tone: "Authoritative", color: "#34d399" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", gender: "Male",   tone: "Conversational", color: "#fb923c" },
+  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli",   gender: "Female", tone: "Energetic & young", color: "#facc15" },
+] as const;
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -40,16 +50,17 @@ export default function Settings() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [connectingIg, setConnectingIg] = useState(false);
   const [loadingPortal, setLoadingPortal] = useState(false);
+  const [savingVoice, setSavingVoice] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     supabase
       .from("user_profiles")
-      .select("instagram_account_id, instagram_username, instagram_token_expires_at, caption_outro, credits_remaining, stripe_customer_id, stripe_subscription_id")
+      .select("instagram_account_id, instagram_username, instagram_token_expires_at, caption_outro, credits_remaining, stripe_customer_id, stripe_subscription_id, preferred_voice_id")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
-        setProfile(data ?? { instagram_account_id: null, instagram_username: null, instagram_token_expires_at: null, caption_outro: null, credits_remaining: null, stripe_customer_id: null, stripe_subscription_id: null });
+        setProfile(data ?? { instagram_account_id: null, instagram_username: null, instagram_token_expires_at: null, caption_outro: null, credits_remaining: null, stripe_customer_id: null, stripe_subscription_id: null, preferred_voice_id: null });
         setOutro(data?.caption_outro ?? "");
       });
   }, [user?.id]);
@@ -65,6 +76,19 @@ export default function Settings() {
     setProfile(p => p ? { ...p, caption_outro: outro } : p);
     setEditingOutro(false);
     toast.success("Saved");
+  };
+
+  const handleSelectVoice = async (voiceId: string | null) => {
+    if (!user) return;
+    setSavingVoice(true);
+    const { error } = await supabase
+      .from("user_profiles")
+      .upsert({ id: user.id, preferred_voice_id: voiceId, updated_at: new Date().toISOString() });
+    setSavingVoice(false);
+    if (error) { toast.error("Failed to save voice"); return; }
+    setProfile(p => p ? { ...p, preferred_voice_id: voiceId } : p);
+    const voiceName = VOICES.find(v => v.id === voiceId)?.name ?? "Default";
+    toast.success(`Voice set to ${voiceId ? voiceName : "Default"}`);
   };
 
   const handleDisconnectInstagram = async () => {
@@ -255,6 +279,76 @@ export default function Settings() {
                     Upgrade plan
                   </button>
                 )}
+              </div>
+            )}
+          </Section>
+
+          {/* Voice */}
+          <Section title="Voiceover" description="Choose the voice used for all your videos. Generate a test video after selecting to hear it.">
+            {profile === null ? (
+              <div className="grid grid-cols-2 gap-2">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="h-16 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {/* Default option */}
+                {(() => {
+                  const isSelected = profile.preferred_voice_id === null;
+                  return (
+                    <button
+                      key="default"
+                      onClick={() => handleSelectVoice(null)}
+                      disabled={savingVoice}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                        isSelected
+                          ? "border-violet-500 bg-violet-500/10"
+                          : "border-gray-800 bg-gray-900 hover:border-gray-600"
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-gray-700 text-gray-300">
+                        ★
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white leading-tight">Default</p>
+                        <p className="text-[10px] text-gray-500 leading-tight truncate">Platform voice</p>
+                      </div>
+                      {isSelected && (
+                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
+                      )}
+                    </button>
+                  );
+                })()}
+                {VOICES.map(voice => {
+                  const isSelected = profile.preferred_voice_id === voice.id;
+                  return (
+                    <button
+                      key={voice.id}
+                      onClick={() => handleSelectVoice(voice.id)}
+                      disabled={savingVoice}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                        isSelected
+                          ? "border-violet-500 bg-violet-500/10"
+                          : "border-gray-800 bg-gray-900 hover:border-gray-600"
+                      }`}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{ background: `${voice.color}20`, color: voice.color }}
+                      >
+                        {voice.name[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white leading-tight">{voice.name}</p>
+                        <p className="text-[10px] text-gray-500 leading-tight truncate">{voice.tone}</p>
+                      </div>
+                      {isSelected && (
+                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </Section>

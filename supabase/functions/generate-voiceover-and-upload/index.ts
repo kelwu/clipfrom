@@ -19,7 +19,8 @@ serve(async (req) => {
   }
 
   try {
-    const { ai_gen_id, captions } = await req.json();
+    const { ai_gen_id, captions, voice_id } = await req.json();
+    const resolvedVoiceId = voice_id ?? Deno.env.get("ELEVENLABS_VOICE_ID") ?? "KXOzch1bNSOicTxNAakl";
 
     // Strip emojis for TTS — emojis are skipped by ElevenLabs and break character offset math
     const cleanCaptions: string[] = Array.isArray(captions) ? captions.map(stripEmojis) : [];
@@ -27,7 +28,7 @@ serve(async (req) => {
 
     // Use the with-timestamps endpoint to get character-level timing data
     const elevenResponse = await fetch(
-      "https://api.elevenlabs.io/v1/text-to-speech/KXOzch1bNSOicTxNAakl/with-timestamps",
+      `https://api.elevenlabs.io/v1/text-to-speech/${resolvedVoiceId}/with-timestamps`,
       {
         method: "POST",
         headers: {

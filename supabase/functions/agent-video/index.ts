@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await supabaseAdmin
       .from("user_profiles")
-      .select("credits_remaining, is_admin")
+      .select("credits_remaining, is_admin, preferred_voice_id")
       .eq("id", callingUser.id)
       .maybeSingle();
 
@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
       : Object.values(gen.caption_options);
 
     const articleImages: string[] = Array.isArray(gen.article_images) ? gen.article_images : [];
+    const voiceId: string | null = (profile as { preferred_voice_id?: string | null } | null)?.preferred_voice_id ?? null;
 
     // Hand off to Railway pipeline (fire and forget — Railway responds 202 immediately)
     const pipelineRes = await fetch(`${RAILWAY_URL}/generate-video`, {
@@ -80,6 +81,7 @@ Deno.serve(async (req) => {
         user_email,
         secret: PIPELINE_SECRET,
         ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
+        ...(voiceId ? { voice_id: voiceId } : {}),
       }),
     });
 

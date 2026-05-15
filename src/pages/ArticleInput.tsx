@@ -368,18 +368,26 @@ const ArticleInput = () => {
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <style>{`
-        .cf-hero-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 64px; align-items: center; }
+        .cf-hero-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 72px; align-items: center; }
         .cf-step-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; margin-bottom: 80px; }
         .cf-step-grid-last { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
         .cf-features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 48px; }
         .cf-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
         .cf-nav-links { display: flex; align-items: center; gap: 24px; }
-        @keyframes cf-float-l { 0%,100% { transform: rotate(-11deg) translateY(0px); } 50% { transform: rotate(-11deg) translateY(-12px); } }
-        @keyframes cf-float-c { 0%,100% { transform: rotate(-2deg) translateY(0px); } 50% { transform: rotate(-2deg) translateY(-9px); } }
-        @keyframes cf-float-r { 0%,100% { transform: rotate(9deg) translateY(0px); } 50% { transform: rotate(9deg) translateY(-14px); } }
-        .cf-card-l { animation: cf-float-l 5s ease-in-out infinite; }
-        .cf-card-c { animation: cf-float-c 5s ease-in-out infinite 0.6s; }
-        .cf-card-r { animation: cf-float-r 5s ease-in-out infinite 1.2s; }
+        @keyframes cf-float-l { 0%,100% { transform: rotate(-10deg) translateY(0px); } 50% { transform: rotate(-10deg) translateY(-10px); } }
+        @keyframes cf-float-c { 0%,100% { transform: rotate(-1deg) translateY(0px); } 50% { transform: rotate(-1deg) translateY(-8px); } }
+        @keyframes cf-float-r { 0%,100% { transform: rotate(8deg) translateY(0px); } 50% { transform: rotate(8deg) translateY(-12px); } }
+        .cf-card-l { animation: cf-float-l 5.5s ease-in-out infinite; }
+        .cf-card-c { animation: cf-float-c 5.5s ease-in-out infinite 0.7s; }
+        .cf-card-r { animation: cf-float-r 5.5s ease-in-out infinite 1.4s; }
+        .cf-scanlines { position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.45) 3px, rgba(255,255,255,0.45) 4px); opacity: 0.03; pointer-events: none; }
+        @keyframes cf-badge-shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+        .cf-badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px; border-radius: 999px; border: 1px solid oklch(72% 0.17 280 / 0.28); background: oklch(72% 0.17 280 / 0.07); color: oklch(72% 0.17 280); font-size: 11px; font-family: "Geist Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 32px; position: relative; overflow: hidden; }
+        .cf-badge::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, oklch(72% 0.17 280 / 0.15) 50%, transparent 100%); background-size: 200% 100%; animation: cf-badge-shimmer 3s linear infinite; }
+        .cf-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: oklch(72% 0.17 280); box-shadow: 0 0 6px oklch(72% 0.17 280); flex-shrink: 0; }
+        .cf-h1-em { color: oklch(72% 0.17 280); font-style: italic; position: relative; display: inline-block; }
+        .cf-h1-em::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 1.5px; background: linear-gradient(90deg, oklch(72% 0.17 280), transparent); opacity: 0.5; }
+        .cf-card-stat { display: flex; align-items: center; gap: 3px; font-size: 8px; font-family: "Geist Mono", monospace; color: rgba(255,255,255,0.55); }
         @media (max-width: 1000px) {
           .cf-hero-grid { grid-template-columns: 1fr !important; gap: 40px !important; }
           .cf-reel-stack { display: none !important; }
@@ -429,77 +437,84 @@ const ArticleInput = () => {
         </nav>
 
         {/* ── Hero ── */}
-        <section ref={heroRef} style={{ position: "relative", paddingTop: 112, paddingBottom: 96, paddingLeft: 24, paddingRight: 24, overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 800, height: 500, pointerEvents: "none",
-            background: "radial-gradient(ellipse at top, oklch(72% 0.17 280 / 0.07) 0%, transparent 65%)" }} />
+        <section ref={heroRef} style={{ position: "relative", paddingTop: 136, paddingBottom: 100, paddingLeft: 24, paddingRight: 24, overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -60, left: "50%", transform: "translateX(-30%)", width: 900, height: 600, pointerEvents: "none",
+            background: "radial-gradient(ellipse at center, oklch(72% 0.17 280 / 0.09) 0%, oklch(72% 0.17 280 / 0.04) 40%, transparent 70%)" }} />
+          <div style={{ position: "absolute", top: "20%", right: -100, width: 500, height: 500, pointerEvents: "none",
+            background: "radial-gradient(ellipse at center, oklch(65% 0.15 240 / 0.06) 0%, transparent 65%)" }} />
           <div style={{ maxWidth: 1120, margin: "0 auto", position: "relative", zIndex: 1 }}>
             <div className="cf-hero-grid">
 
               {/* Left */}
               <div>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "4px 12px", borderRadius: 999,
-                  border: "1px solid oklch(72% 0.17 280 / 0.3)", background: "oklch(72% 0.17 280 / 0.06)",
-                  color: C.accent, fontSize: 11, fontFamily: mono, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 28 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.accent, display: "inline-block" }} />
+                <div className="cf-badge">
+                  <span className="cf-badge-dot" />
                   Article → Reels in minutes
                 </div>
-                <h1 style={{ fontFamily: serif, fontSize: "clamp(2.8rem, 4.5vw, 4rem)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.02em", margin: "0 0 20px" }}>
-                  Turn any article into<br /><em style={{ color: C.accent }}>Reels that perform.</em>
+                <h1 style={{ fontFamily: serif, fontSize: "clamp(3rem, 4.8vw, 4.4rem)", fontWeight: 400, lineHeight: 1.03, letterSpacing: "-0.025em", margin: "0 0 22px" }}>
+                  Turn any article into<br /><span className="cf-h1-em">Reels that perform.</span>
                 </h1>
                 <p style={{ color: C.fgMuted, fontSize: 16, lineHeight: 1.65, maxWidth: 420, margin: "0 0 36px" }}>
                   Paste a URL, walk away. ClipFrom writes the script, records the voice, sources B-roll, and stitches five 9:16 clips — ready to post on Instagram.
                 </p>
 
                 <form onSubmit={handleSubmit} style={{ maxWidth: 480 }}>
-                  {/* Mode tabs */}
-                  <div style={{ display: "flex", gap: 4, marginBottom: 12, padding: 4, background: C.surface, border: `1px solid ${C.strokeSoft}`, borderRadius: 12, width: "fit-content" }}>
-                    {([["url", "URL"], ["text", "Paste Text"], ["video", "Upload Video"]] as const).map(([mode, label]) => (
-                      <button key={mode} type="button" onClick={() => setInputMode(mode)}
-                        style={{ padding: "6px 18px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-                          background: inputMode === mode ? C.accent : "transparent",
-                          color: inputMode === mode ? "oklch(14% 0.015 250)" : C.fgDim }}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
                   {/* Input card */}
-                  <div style={{ background: C.surface, border: `1px solid ${C.strokeMed}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 48px oklch(0% 0 0 / 0.4)" }}>
+                  <div style={{ background: C.surface, border: `1px solid ${C.strokeMed}`, borderRadius: 18, overflow: "hidden",
+                    boxShadow: `0 0 0 1px oklch(72% 0.17 280 / 0.08), 0 32px 64px oklch(0% 0 0 / 0.5), 0 0 80px oklch(72% 0.17 280 / 0.07)` }}>
+                    {/* Mode tabs — inside the card */}
+                    <div style={{ display: "flex", gap: 3, padding: 5, background: `oklch(12% 0.015 255)`, borderBottom: `1px solid ${C.strokeSoft}` }}>
+                      {([["url", "URL"], ["text", "Paste Text"], ["video", "Upload Video"]] as const).map(([mode, label]) => (
+                        <button key={mode} type="button" onClick={() => setInputMode(mode)}
+                          style={{ flex: 1, padding: "7px 12px", borderRadius: 10, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                            background: inputMode === mode ? C.accent : "transparent",
+                            color: inputMode === mode ? "oklch(11% 0.018 255)" : C.fgMuted,
+                            boxShadow: inputMode === mode ? "0 2px 8px oklch(72% 0.17 280 / 0.3)" : "none" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
                     <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.strokeSoft}` }}>
                       {inputMode === "url" ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgDim} strokeWidth="2" style={{ flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgMuted} strokeWidth="2" style={{ flexShrink: 0 }}>
                             <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
                           </svg>
                           <div style={{ position: "relative", flex: 1 }}>
                             <input type="text" value={articleUrl} onChange={e => setArticleUrl(e.target.value)}
                               style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: C.fg, fontSize: 14, fontFamily: mono, position: "relative", zIndex: 1 }} />
                             {!articleUrl && (
-                              <div style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", fontFamily: mono, fontSize: 14, color: C.fgDim, display: "flex", alignItems: "center", lineHeight: "normal" }}>
-                                {typedUrl}<span style={{ display: "inline-block", width: 1, height: "1em", background: C.accent, marginLeft: 1, verticalAlign: "middle" }} />
+                              <div style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none", fontFamily: mono, fontSize: 14, color: C.fgMuted, display: "flex", alignItems: "center", lineHeight: "normal" }}>
+                                {typedUrl}<span style={{ display: "inline-block", width: 1.5, height: "1em", background: C.accent, marginLeft: 1, verticalAlign: "middle", opacity: 0.9 }} />
                               </div>
                             )}
                           </div>
                         </div>
                       ) : inputMode === "text" ? (
-                        <textarea value={articleText} onChange={e => setArticleText(e.target.value)}
-                          placeholder="Paste your article or content here…" rows={4}
-                          style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: C.fg, fontSize: 14, resize: "none", lineHeight: 1.6, fontFamily: '"Geist", system-ui, sans-serif' }} />
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgMuted} strokeWidth="2" style={{ flexShrink: 0, marginTop: 2 }}>
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                          </svg>
+                          <textarea value={articleText} onChange={e => setArticleText(e.target.value)}
+                            placeholder="Paste your article or content here…" rows={4}
+                            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.fg, fontSize: 14, resize: "none", lineHeight: 1.6, fontFamily: '"Geist", system-ui, sans-serif' }} />
+                        </div>
                       ) : (
                         <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "24px 16px", cursor: "pointer", textAlign: "center" }}>
                           <input type="file" accept="video/*" style={{ display: "none" }} onChange={e => setVideoFile(e.target.files?.[0] ?? null)} />
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={videoFile ? C.accent : C.fgDim} strokeWidth="1.5">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={videoFile ? C.accent : C.fgMuted} strokeWidth="1.5">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                           </svg>
                           {videoFile ? (
                             <div>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>{videoFile.name}</p>
-                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgDim }}>{(videoFile.size / 1024 / 1024).toFixed(1)} MB · click to change</p>
+                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>{(videoFile.size / 1024 / 1024).toFixed(1)} MB · click to change</p>
                             </div>
                           ) : (
                             <div>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Click to upload your video</p>
-                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgDim }}>MP4, MOV, WebM · up to 500 MB · max 3 min</p>
+                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · up to 500 MB · max 3 min</p>
                             </div>
                           )}
                         </label>
@@ -507,14 +522,14 @@ const ArticleInput = () => {
                     </div>
                     {user ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: `1px solid ${C.strokeSoft}` }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgDim} strokeWidth="2" style={{ flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgMuted} strokeWidth="2" style={{ flexShrink: 0 }}>
                           <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                         </svg>
                         <span style={{ flex: 1, fontSize: 14, color: C.fgMuted }}>Notification → <span style={{ color: C.fg }}>{user.email}</span></span>
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: `1px solid ${C.strokeSoft}` }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgDim} strokeWidth="2" style={{ flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgMuted} strokeWidth="2" style={{ flexShrink: 0 }}>
                           <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                         </svg>
                         <input type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)}
@@ -531,11 +546,12 @@ const ArticleInput = () => {
                             disabled={!!outOfCredits}
                             style={{
                               width: "100%", padding: "13px 0", background: outOfCredits ? "oklch(30% 0.01 250)" : C.accent,
-                              border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700,
-                              color: outOfCredits ? "oklch(55% 0.01 250)" : "oklch(14% 0.015 250)",
+                              border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700,
+                              color: outOfCredits ? "oklch(55% 0.01 250)" : "oklch(11% 0.018 255)",
                               cursor: outOfCredits ? "not-allowed" : "pointer",
                               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                              boxShadow: outOfCredits ? "none" : "0 0 20px oklch(72% 0.17 280 / 0.3)",
+                              boxShadow: outOfCredits ? "none" : "0 4px 20px oklch(72% 0.17 280 / 0.35), inset 0 1px 0 oklch(100% 0 0 / 0.15)",
+                              transition: "all 0.15s",
                             }}
                           >
                             {outOfCredits ? "No credits remaining" : inputMode === "video" ? "Upload & Transcribe" : "Generate my video"}
@@ -551,7 +567,7 @@ const ArticleInput = () => {
                       ? ["9:16 vertical", "Auto captions", "B-roll added"]
                       : ["9:16 vertical", "AI voiceover", "~3 min render"]
                     ).map(item => (
-                      <span key={item} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.fgDim, fontFamily: mono }}>
+                      <span key={item} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.fgMuted, fontFamily: mono }}>
                         <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent, display: "inline-block" }} />
                         {item}
                       </span>
@@ -565,19 +581,29 @@ const ArticleInput = () => {
                 <div style={{ position: "relative", width: 460, height: 480 }}>
 
                   {/* Left card — dark red, rotated left */}
-                  <div className="cf-card-l" style={{ position: "absolute", left: 0, top: 60, width: 178, height: 316, borderRadius: 20, overflow: "hidden", zIndex: 5,
-                    background: "linear-gradient(160deg, oklch(28% 0.07 15), oklch(18% 0.04 10), oklch(12% 0.02 0))",
-                    border: "1px solid oklch(100% 0 0 / 0.1)", boxShadow: "0 24px 48px oklch(0% 0 0 / 0.55)" }}>
-                    <div style={{ position: "absolute", inset: 0, opacity: 0.035, pointerEvents: "none",
-                      backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.5) 3px, rgba(255,255,255,0.5) 4px)" }} />
+                  <div className="cf-card-l" style={{ position: "absolute", left: 0, top: 70, width: 178, height: 316, borderRadius: 20, overflow: "hidden", zIndex: 5,
+                    background: "linear-gradient(160deg, oklch(32% 0.09 15), oklch(20% 0.05 10), oklch(12% 0.02 0))",
+                    border: "1px solid oklch(100% 0 0 / 0.1)", boxShadow: "0 24px 48px oklch(0% 0 0 / 0.6), 0 0 0 1px oklch(100% 0 0 / 0.05)" }}>
+                    <div className="cf-scanlines" />
                     {/* LIVE badge */}
-                    <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "center", gap: 4, background: "oklch(0% 0 0 / 0.55)", borderRadius: 999, padding: "3px 8px" }}>
+                    <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "center", gap: 4, background: "oklch(0% 0 0 / 0.6)", borderRadius: 999, padding: "3px 8px" }}>
                       <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#ff4444", display: "inline-block" }} />
                       <span style={{ fontFamily: mono, fontSize: 7, color: "#fff", fontWeight: 600, letterSpacing: "0.08em" }}>LIVE</span>
                     </div>
+                    {/* Engagement stats */}
+                    <div style={{ position: "absolute", top: 12, right: 12, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                      <div className="cf-card-stat">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="rgba(255,255,255,0.55)"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                        <span>24.1k</span>
+                      </div>
+                      <div className="cf-card-stat">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                        <span>847</span>
+                      </div>
+                    </div>
                     {/* Play */}
                     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "oklch(100% 0 0 / 0.1)", border: "1px solid oklch(100% 0 0 / 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "oklch(100% 0 0 / 0.1)", border: "1px solid oklch(100% 0 0 / 0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><polygon points="6,3 20,12 6,21"/></svg>
                       </div>
                     </div>
@@ -585,69 +611,89 @@ const ArticleInput = () => {
                     <div style={{ position: "absolute", bottom: 28, left: 10, right: 10 }}>
                       <div style={{ fontSize: 9, fontWeight: 700, lineHeight: 1.4, display: "flex", flexWrap: "wrap", gap: 3 }}>
                         {["Most", "founders", "get", "this"].map(w => (
-                          <span key={w} style={{ background: "oklch(0% 0 0 / 0.7)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>{w}</span>
+                          <span key={w} style={{ background: "oklch(0% 0 0 / 0.72)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>{w}</span>
                         ))}
-                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 5px", color: "oklch(14% 0.015 250)", fontWeight: 800 }}>backwards</span>
+                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 5px", color: "oklch(11% 0.018 255)", fontWeight: 800 }}>backwards</span>
                       </div>
                     </div>
                     {/* Progress bar */}
                     <div style={{ position: "absolute", bottom: 14, left: 10, right: 10 }}>
                       <div style={{ height: 2, background: "oklch(100% 0 0 / 0.1)", borderRadius: 999, overflow: "hidden" }}>
-                        <div style={{ width: "45%", height: "100%", background: "oklch(100% 0 0 / 0.5)", borderRadius: 999 }} />
+                        <div style={{ width: "45%", height: "100%", background: "oklch(100% 0 0 / 0.45)", borderRadius: 999 }} />
                       </div>
                     </div>
                   </div>
 
                   {/* Center card — dark green, most prominent */}
                   <div className="cf-card-c" style={{ position: "absolute", left: 118, top: 0, width: 210, height: 374, borderRadius: 22, overflow: "hidden", zIndex: 10,
-                    background: "linear-gradient(160deg, oklch(28% 0.07 155), oklch(20% 0.05 160), oklch(13% 0.02 165))",
-                    border: "1px solid oklch(100% 0 0 / 0.13)", boxShadow: `0 0 0 1px oklch(72% 0.17 280 / 0.12), 0 32px 64px oklch(0% 0 0 / 0.65), 0 0 50px oklch(72% 0.17 280 / 0.08)` }}>
-                    <div style={{ position: "absolute", inset: 0, opacity: 0.04, pointerEvents: "none",
-                      backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.5) 3px, rgba(255,255,255,0.5) 4px)" }} />
+                    background: "linear-gradient(160deg, oklch(30% 0.08 160), oklch(21% 0.05 162), oklch(13% 0.02 165))",
+                    border: "1px solid oklch(100% 0 0 / 0.13)", boxShadow: `0 0 0 1px oklch(72% 0.17 280 / 0.15), 0 40px 80px oklch(0% 0 0 / 0.7), 0 0 60px oklch(72% 0.17 280 / 0.1)` }}>
+                    <div className="cf-scanlines" />
                     {/* Header row */}
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 13px 0" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, background: "oklch(0% 0 0 / 0.5)", borderRadius: 999, padding: "3px 8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, background: "oklch(0% 0 0 / 0.55)", borderRadius: 999, padding: "3px 8px" }}>
                         <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#ff4444", display: "inline-block" }} />
                         <span style={{ fontFamily: mono, fontSize: 7, color: "#fff", fontWeight: 600, letterSpacing: "0.08em" }}>LIVE</span>
                       </div>
-                      <div style={{ background: "oklch(72% 0.17 280 / 0.12)", border: "1px solid oklch(72% 0.17 280 / 0.25)", borderRadius: 999, padding: "3px 8px" }}>
+                      <div style={{ background: "oklch(72% 0.17 280 / 0.14)", border: "1px solid oklch(72% 0.17 280 / 0.28)", borderRadius: 999, padding: "3px 8px" }}>
                         <span style={{ fontFamily: mono, fontSize: 7, fontWeight: 600, color: C.accent, letterSpacing: "0.08em" }}>AI · CLIP 3/5</span>
                       </div>
                     </div>
+                    {/* Side engagement buttons */}
+                    <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
+                      {[
+                        { icon: <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>, fill: true, label: "48.2k" },
+                        { icon: <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>, fill: false, label: "1.4k" },
+                        { icon: <><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></>, fill: false, label: "Share" },
+                      ].map(({ icon, fill, label }) => (
+                        <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "oklch(100% 0 0 / 0.08)", border: "1px solid oklch(100% 0 0 / 0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill={fill ? "white" : "none"} stroke={fill ? "none" : "white"} strokeWidth="2">{icon}</svg>
+                          </div>
+                          <span style={{ fontSize: 8, fontFamily: mono, color: "rgba(255,255,255,0.6)" }}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
                     {/* Play */}
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <div style={{ width: 48, height: 48, borderRadius: "50%", background: "oklch(100% 0 0 / 0.08)", border: "1px solid oklch(100% 0 0 / 0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", paddingRight: 40 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: "50%", background: "oklch(100% 0 0 / 0.1)", border: "1px solid oklch(100% 0 0 / 0.16)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><polygon points="6,3 20,12 6,21"/></svg>
                       </div>
                     </div>
-                    {/* Caption with highlight */}
-                    <div style={{ position: "absolute", bottom: 30, left: 12, right: 12 }}>
+                    {/* Caption */}
+                    <div style={{ position: "absolute", bottom: 30, left: 12, right: 44 }}>
                       <div style={{ fontSize: 10, fontWeight: 700, lineHeight: 1.5, display: "flex", flexWrap: "wrap", gap: 3 }}>
                         {["AI", "isn't", "taking", "your", "job", "—"].map(w => (
-                          <span key={w} style={{ background: "oklch(0% 0 0 / 0.7)", borderRadius: 4, padding: "2px 6px", color: "#fff" }}>{w}</span>
+                          <span key={w} style={{ background: "oklch(0% 0 0 / 0.72)", borderRadius: 4, padding: "2px 6px", color: "#fff" }}>{w}</span>
                         ))}
-                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 6px", color: "oklch(14% 0.015 250)", fontWeight: 800 }}>it's</span>
-                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 6px", color: "oklch(14% 0.015 250)", fontWeight: 800 }}>rewriting</span>
-                        <span style={{ background: "oklch(0% 0 0 / 0.7)", borderRadius: 4, padding: "2px 6px", color: "#fff" }}>it</span>
+                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 6px", color: "oklch(11% 0.018 255)", fontWeight: 800 }}>it's</span>
+                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 6px", color: "oklch(11% 0.018 255)", fontWeight: 800 }}>rewriting</span>
+                        <span style={{ background: "oklch(0% 0 0 / 0.72)", borderRadius: 4, padding: "2px 6px", color: "#fff" }}>it</span>
                       </div>
                     </div>
                     {/* Progress bar */}
-                    <div style={{ position: "absolute", bottom: 14, left: 13, right: 13 }}>
+                    <div style={{ position: "absolute", bottom: 15, left: 13, right: 44 }}>
                       <div style={{ height: 2, background: "oklch(100% 0 0 / 0.1)", borderRadius: 999, overflow: "hidden" }}>
-                        <div style={{ width: "60%", height: "100%", background: C.accent, borderRadius: 999 }} />
+                        <div style={{ width: "62%", height: "100%", background: C.accent, borderRadius: 999 }} />
                       </div>
                     </div>
                   </div>
 
                   {/* Right card — dark navy, rotated right */}
-                  <div className="cf-card-r" style={{ position: "absolute", right: 0, top: 40, width: 178, height: 316, borderRadius: 20, overflow: "hidden", zIndex: 3,
-                    background: "linear-gradient(160deg, oklch(24% 0.05 240), oklch(17% 0.04 245), oklch(12% 0.02 250))",
+                  <div className="cf-card-r" style={{ position: "absolute", right: 0, top: 50, width: 178, height: 316, borderRadius: 20, overflow: "hidden", zIndex: 3,
+                    background: "linear-gradient(160deg, oklch(26% 0.06 245), oklch(18% 0.04 248), oklch(12% 0.02 252))",
                     border: "1px solid oklch(100% 0 0 / 0.09)", boxShadow: "0 24px 48px oklch(0% 0 0 / 0.5)" }}>
-                    <div style={{ position: "absolute", inset: 0, opacity: 0.035, pointerEvents: "none",
-                      backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.5) 3px, rgba(255,255,255,0.5) 4px)" }} />
+                    <div className="cf-scanlines" />
                     {/* AI badge */}
-                    <div style={{ position: "absolute", top: 12, right: 12, background: "oklch(72% 0.17 280 / 0.1)", border: "1px solid oklch(72% 0.17 280 / 0.2)", borderRadius: 7, padding: "3px 8px" }}>
+                    <div style={{ position: "absolute", top: 12, right: 12, background: "oklch(72% 0.17 280 / 0.1)", border: "1px solid oklch(72% 0.17 280 / 0.22)", borderRadius: 7, padding: "3px 8px" }}>
                       <span style={{ fontFamily: mono, fontSize: 7, fontWeight: 600, color: C.accent, letterSpacing: "0.1em" }}>AI</span>
+                    </div>
+                    {/* Engagement stat */}
+                    <div style={{ position: "absolute", top: 12, left: 12 }}>
+                      <div className="cf-card-stat">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="rgba(255,255,255,0.55)"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                        <span>18.7k</span>
+                      </div>
                     </div>
                     {/* Play */}
                     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -659,16 +705,17 @@ const ArticleInput = () => {
                     <div style={{ position: "absolute", bottom: 28, left: 10, right: 10 }}>
                       <div style={{ fontSize: 9, fontWeight: 700, lineHeight: 1.4, display: "flex", flexWrap: "wrap", gap: 3 }}>
                         {["the", "rule"].map(w => (
-                          <span key={w} style={{ background: "oklch(0% 0 0 / 0.7)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>{w}</span>
+                          <span key={w} style={{ background: "oklch(0% 0 0 / 0.72)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>{w}</span>
                         ))}
-                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 5px", color: "oklch(14% 0.015 250)", fontWeight: 800 }}>that</span>
-                        <span style={{ background: "oklch(0% 0 0 / 0.7)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>changed</span>
+                        <span style={{ background: "oklch(72% 0.17 280)", borderRadius: 4, padding: "2px 5px", color: "oklch(11% 0.018 255)", fontWeight: 800 }}>that</span>
+                        <span style={{ background: "oklch(0% 0 0 / 0.72)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>changed</span>
+                        <span style={{ background: "oklch(0% 0 0 / 0.72)", borderRadius: 4, padding: "2px 5px", color: "#fff" }}>everything</span>
                       </div>
                     </div>
                     {/* Progress bar */}
                     <div style={{ position: "absolute", bottom: 14, left: 10, right: 10 }}>
                       <div style={{ height: 2, background: "oklch(100% 0 0 / 0.1)", borderRadius: 999, overflow: "hidden" }}>
-                        <div style={{ width: "75%", height: "100%", background: "oklch(100% 0 0 / 0.45)", borderRadius: 999 }} />
+                        <div style={{ width: "75%", height: "100%", background: "oklch(100% 0 0 / 0.4)", borderRadius: 999 }} />
                       </div>
                     </div>
                   </div>

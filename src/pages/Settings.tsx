@@ -17,6 +17,7 @@ interface Profile {
 }
 
 const VOICES = [
+  { id: "KXOzch1bNSOicTxNAakl", name: "Kel",    gender: "Male",   tone: "Custom voice", color: "#e879f9" },
   { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "Female", tone: "Calm & clear", color: "#a78bfa" },
   { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh",   gender: "Male",   tone: "Deep & warm",  color: "#60a5fa" },
   { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",  gender: "Female", tone: "Soft & expressive", color: "#f472b6" },

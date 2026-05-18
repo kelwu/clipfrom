@@ -10,17 +10,27 @@ export default function UpgradeSuccess() {
 
   useEffect(() => {
     if (!user) return;
-    // Poll briefly for the webhook to land, then show credits
     let attempts = 0;
+    let initialCredits: number | null = null;
     const interval = setInterval(async () => {
       const { data } = await supabase
         .from("user_profiles")
         .select("credits_remaining")
         .eq("id", user.id)
         .maybeSingle();
-      if (data) setCredits(data.credits_remaining);
-      if (++attempts >= 6) clearInterval(interval);
-    }, 2000);
+      if (data) {
+        // Capture baseline on first poll, stop as soon as credits increase
+        if (initialCredits === null) {
+          initialCredits = data.credits_remaining;
+        } else if (data.credits_remaining > initialCredits) {
+          setCredits(data.credits_remaining);
+          clearInterval(interval);
+          return;
+        }
+        setCredits(data.credits_remaining);
+      }
+      if (++attempts >= 20) clearInterval(interval);
+    }, 3000);
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -45,8 +55,8 @@ export default function UpgradeSuccess() {
             You now have {credits} credit{credits !== 1 ? "s" : ""} ready to use.
           </p>
         ) : (
-          <p style={{ fontSize: 13, color: "oklch(45% 0.01 250)", marginBottom: 32 }}>
-            Credits are being added — this takes a few seconds…
+          <p style={{ fontSize: 13, color: "oklch(55% 0.01 250)", marginBottom: 32 }}>
+            Credits are being added — this usually takes a few seconds…
           </p>
         )}
 

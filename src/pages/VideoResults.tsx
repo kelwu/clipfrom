@@ -57,6 +57,8 @@ export default function VideoResults() {
   const transitionStyle: string = location.state?.transitionStyle ?? "cut";
   const videoSource: string = location.state?.videoSource ?? "ai";
   const sourceMode: string = location.state?.sourceMode ?? "article";
+  const showHookCard: boolean = location.state?.showHookCard ?? false;
+  const captionFont: string | undefined = location.state?.captionFont;
 
   const clips = [result.video_url_1, result.video_url_2, result.video_url_3, result.video_url_4, result.video_url_5];
   const videoUrlsFilled = clips.filter(Boolean).length;
@@ -178,7 +180,7 @@ export default function VideoResults() {
               "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
               "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
-            body: JSON.stringify({ project_id: projectId, user_email: userEmail, captionStyle, transitionStyle, videoSource }),
+            body: JSON.stringify({ project_id: projectId, user_email: userEmail, captionStyle, transitionStyle, videoSource, ...(showHookCard ? { showHookCard: true } : {}), ...(captionFont ? { captionFont } : {}) }),
           });
         }
 
@@ -596,15 +598,29 @@ export default function VideoResults() {
 
         {/* ── Center: video player ── */}
         <div className="flex-1 flex flex-col items-center justify-start py-8 px-6 overflow-y-auto">
-          <div className="w-full max-w-sm space-y-5">
+          <div className="w-full max-w-xs space-y-5">
             {/* Video */}
             <div className="aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
               <video
                 src={result.stitched_video_url!}
                 controls
+                autoPlay
+                muted
+                playsInline
                 className="w-full h-full"
               />
             </div>
+            {/* Download button — prominent, below the player */}
+            <a
+              href={result.stitched_video_url!}
+              download
+              className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-sm font-bold transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download Video
+            </a>
 
             {/* Instagram caption */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

@@ -124,6 +124,8 @@ export default function CaptionEditor() {
   const [captions, setCaptions] = useState<Caption[]>(initialCaptions);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<PresetId>("viral");
+  const [showHookCard, setShowHookCard] = useState(false);
+  const [captionFont, setCaptionFont] = useState("Inter");
 
   const enabledCount = captions.filter((c) => c.enabled).length;
 
@@ -156,6 +158,8 @@ export default function CaptionEditor() {
         captionStyle: preset.captionStyle,
         transitionStyle: preset.transitionStyle,
         videoSource: preset.videoSource,
+        showHookCard,
+        captionFont,
       },
     });
   };
@@ -396,6 +400,50 @@ export default function CaptionEditor() {
                   </div>
                 );
               })()}
+
+              {/* Hook intro toggle */}
+              <div className="mt-4 px-3 py-3 rounded-lg bg-gray-900 border border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-300">Hook Intro</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">Show caption 1 as full-screen text for 2.5s</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHookCard(v => !v)}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${showHookCard ? "bg-violet-500" : "bg-gray-700"}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${showHookCard ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Caption font selector */}
+              <div className="mt-3 px-3 py-3 rounded-lg bg-gray-900 border border-gray-800">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2.5">Caption Font</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: "Inter",       label: "Inter",     style: {} },
+                    { id: "Montserrat",  label: "Montserrat",style: { fontFamily: "var(--font-montserrat, sans-serif)" } },
+                    { id: "Bebas Neue",  label: "BEBAS",     style: { textTransform: "uppercase" as const, letterSpacing: "0.05em" } },
+                    { id: "Oswald",      label: "Oswald",    style: {} },
+                  ].map(({ id, label, style }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setCaptionFont(id)}
+                      className={`px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-all ${
+                        captionFont === id
+                          ? "border-violet-500/60 bg-violet-500/10 text-violet-300"
+                          : "border-gray-700 bg-gray-800/60 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                      }`}
+                      style={style}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
             </div>
           </div>

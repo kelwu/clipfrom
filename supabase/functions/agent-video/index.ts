@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
 
   try {
     const payload: VideoWebhookPayload = await req.json();
-    const { project_id, user_email = "", captionStyle = "pill", transitionStyle = "cut", videoSource = "ai" } = payload;
+    const { project_id, user_email = "", captionStyle = "pill", transitionStyle = "cut", videoSource = "ai", showHookCard, captionFont } = payload as typeof payload & { showHookCard?: boolean; captionFont?: string };
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -102,6 +102,8 @@ Deno.serve(async (req) => {
         secret: PIPELINE_SECRET,
         ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
         ...(voiceId ? { voice_id: voiceId } : {}),
+        ...(showHookCard ? { showHookCard: true } : {}),
+        ...(captionFont ? { captionFont } : {}),
       }),
     });
 

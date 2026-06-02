@@ -8,6 +8,21 @@ const corsHeaders = {
 const RAILWAY_URL = Deno.env.get("RAILWAY_URL") ?? "https://clipfrom-remotion-production.up.railway.app";
 const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
 
+async function refundCredit(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
+  const { data } = await supabaseAdmin
+    .from("user_profiles")
+    .select("credits_remaining")
+    .eq("id", userId)
+    .maybeSingle();
+  if (data) {
+    await supabaseAdmin
+      .from("user_profiles")
+      .update({ credits_remaining: data.credits_remaining + 1 })
+      .eq("id", userId);
+    console.log(`Refunded 1 credit to user ${userId}`);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -20,7 +35,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Verify JWT and check credits
+    // Verify JWT
     const authHeader = req.headers.get("Authorization");
     const token = authHeader?.replace("Bearer ", "");
     if (!token) {
@@ -36,20 +51,27 @@ Deno.serve(async (req) => {
     }
 
     const { data: profile } = await supabaseAdmin
-      .from("users")
-      .select("credits_remaining")
+      .from("user_profiles")
+      .select("credits_remaining, is_admin")
       .eq("id", user.id)
       .maybeSingle();
 
-    if ((profile?.credits_remaining ?? 0) < 1) {
+    if (!profile?.is_admin && (profile?.credits_remaining ?? 0) < 1) {
       return new Response(JSON.stringify({ error: "no_credits" }), {
         status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    await supabaseAdmin
-      .from("users")
-      .update({ credits_remaining: profile!.credits_remaining - 1 })
-      .eq("id", user.id);
+
+    let creditDecremented = false;
+    const userId = user.id;
+
+    if (!profile?.is_admin) {
+      await supabaseAdmin
+        .from("user_profiles")
+        .update({ credits_remaining: profile!.credits_remaining - 1 })
+        .eq("id", userId);
+      creditDecremented = true;
+    }
 
     // Fetch ai_gen_id
     const { data: gen, error: genError } = await supabaseAdmin
@@ -59,6 +81,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (genError || !gen?.id) {
+      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
       return new Response(JSON.stringify({ error: "No transcript found for project" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -85,6 +108,7 @@ Deno.serve(async (req) => {
 
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
+      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
       throw new Error(`Pipeline start failed: ${pipelineRes.status} ${errText}`);
     }
 

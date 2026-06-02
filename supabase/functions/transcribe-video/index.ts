@@ -18,6 +18,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     project_id = body.project_id;
     const video_url: string = body.video_url;
+    const video_duration_frames: number = body.video_duration_frames ?? 0;
 
     if (!project_id || !video_url) {
       return new Response(JSON.stringify({ error: "project_id and video_url are required" }), {
@@ -31,27 +32,32 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Mark as transcribing
-    await supabase.from("ai_generations").upsert({
+    // Mark as transcribing (onConflict handles projects that already have an article-mode row)
+    const { error: upsertError } = await supabase.from("ai_generations").upsert({
       project_id,
       source_mode: "video",
       user_video_url: video_url,
       status: "transcribing",
-    });
+      ...(video_duration_frames > 0 ? { video_duration_frames } : {}),
+    }, { onConflict: "project_id" });
 
-    // Call ElevenLabs Scribe via source_url (no download needed)
+    if (upsertError) throw new Error(`DB upsert failed: ${upsertError.message}`);
+
+    // Download video from Supabase Storage, then POST binary to ElevenLabs Scribe
+    const videoRes = await fetch(video_url);
+    if (!videoRes.ok) throw new Error(`Failed to fetch video: ${videoRes.status}`);
+    const videoBlob = await videoRes.blob();
+
+    const formData = new FormData();
+    formData.append("file", videoBlob, "video.mp4");
+    formData.append("model_id", "scribe_v1");
+    formData.append("timestamps_granularity", "word");
+    formData.append("tag_audio_events", "false");
+
     const scribeRes = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
       method: "POST",
-      headers: {
-        "xi-api-key": elevenLabsKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        source_url: video_url,
-        model_id: "scribe_v1",
-        timestamps_granularity: "word",
-        tag_audio_events: false,
-      }),
+      headers: { "xi-api-key": elevenLabsKey },
+      body: formData,
     });
 
     if (!scribeRes.ok) {

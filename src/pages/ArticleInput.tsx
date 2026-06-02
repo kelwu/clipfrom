@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import * as tus from "tus-js-client";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -183,9 +184,11 @@ const ArticleInput = () => {
     if (inputMode === "video") {
       if (!videoFile) { toast.error("Please select a video file"); return; }
       if (!user) { navigate("/login?returnTo=/"); return; }
-      const MAX_SIZE_MB = 500;
+      // Free-tier Supabase Storage hard-caps uploads at 50 MB (server-side, not configurable).
+      // On Pro tier this becomes 5 GB — raise MAX_SIZE_MB and remove this comment when upgraded.
+      const MAX_SIZE_MB = 50;
       if (videoFile.size > MAX_SIZE_MB * 1024 * 1024) {
-        toast.error(`Video is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Please use a file under ${MAX_SIZE_MB} MB.`);
+        toast.error(`Video is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Maximum is ${MAX_SIZE_MB} MB.`);
         return;
       }
 
@@ -200,14 +203,49 @@ const ArticleInput = () => {
         if (projectError) throw new Error("Failed to create project");
         projectId = projectData.id;
 
-        const filePath = `${user.id}/${projectId}/${videoFile.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from("user-videos")
-          .upload(filePath, videoFile, { cacheControl: "3600", upsert: false });
-        if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+        const safeFileName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${user.id}/${projectId}/${safeFileName}`;
+        const mimeType = videoFile.type.startsWith("video/") ? videoFile.type : "video/mp4";
+
+        // Use TUS resumable upload — Supabase's standard endpoint caps at ~50MB
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+        const { data: { session: uploadSession } } = await supabase.auth.getSession();
+        const accessToken = uploadSession?.access_token ?? supabaseAnonKey;
+
+        await new Promise<void>((resolve, reject) => {
+          const upload = new tus.Upload(videoFile, {
+            endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+            retryDelays: [0, 3000, 5000, 10000, 20000],
+            headers: {
+              authorization: `Bearer ${accessToken}`,
+              "x-upsert": "true",
+            },
+            uploadDataDuringCreation: true,
+            removeFingerprintOnSuccess: true,
+            metadata: {
+              bucketName: "user-videos",
+              objectName: filePath,
+              contentType: mimeType,
+              cacheControl: "3600",
+            },
+            chunkSize: 6 * 1024 * 1024,
+            onError: (err) => reject(new Error(`Upload failed: ${err.message}`)),
+            onSuccess: () => resolve(),
+          });
+          upload.start();
+        });
         uploadedFilePath = filePath;
 
         const { data: { publicUrl } } = supabase.storage.from("user-videos").getPublicUrl(filePath);
+
+        const videoDurationFrames = await new Promise<number>((resolve) => {
+          const vid = document.createElement("video");
+          vid.preload = "metadata";
+          vid.onloadedmetadata = () => { resolve(Math.round(vid.duration * 30)); URL.revokeObjectURL(vid.src); };
+          vid.onerror = () => resolve(0);
+          vid.src = URL.createObjectURL(videoFile);
+        });
 
         const resolvedEmail = user.email ?? "";
         const transcribeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-video`;
@@ -218,7 +256,7 @@ const ArticleInput = () => {
             "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ project_id: projectId, video_url: publicUrl }),
+          body: JSON.stringify({ project_id: projectId, video_url: publicUrl, video_duration_frames: videoDurationFrames }),
         });
         if (!res.ok) throw new Error("Transcription request failed");
 

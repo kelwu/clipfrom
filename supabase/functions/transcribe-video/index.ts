@@ -32,6 +32,26 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Verify the caller owns this project
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: projectRow } = await supabase.from("projects").select("user_id").eq("id", project_id).maybeSingle();
+    if (!projectRow || projectRow.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Not your project" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Mark as transcribing (onConflict handles projects that already have an article-mode row)
     const { error: upsertError } = await supabase.from("ai_generations").upsert({
       project_id,

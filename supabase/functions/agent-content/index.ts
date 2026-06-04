@@ -53,6 +53,26 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Verify the caller owns this project
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: project } = await supabase.from("projects").select("user_id").eq("id", project_id).maybeSingle();
+    if (!project || project.user_id !== user.id) {
+      return new Response(JSON.stringify({ error: "Not your project" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Mark processing immediately
     await supabase.from("ai_generations").upsert(
       { project_id, status: "processing", caption_options: [] },
@@ -63,10 +83,29 @@ Deno.serve(async (req) => {
     let articleText = content;
     let articleImages: string[] = [];
     if (type === "url") {
+      // SSRF guard: only fetch public http/https URLs, block private ranges
+      let parsedUrl: URL;
+      try { parsedUrl = new URL(content); } catch { throw new Error("Invalid URL"); }
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        throw new Error("Only http and https URLs are supported");
+      }
+      const privateRange = /^(localhost|127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.0\.0\.0|::1)/i;
+      if (privateRange.test(parsedUrl.hostname)) {
+        throw new Error("URL points to a private address");
+      }
+
       const resp = await fetch(content, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; ClipFrom/1.0)" },
+        signal: AbortSignal.timeout(15_000),
       });
-      const html = await resp.text();
+      if (!resp.ok) throw new Error(`Article fetch failed: ${resp.status}`);
+
+      // Cap at 2 MB — prevents memory exhaustion from large pages or binary files
+      const MAX_BYTES = 2 * 1024 * 1024;
+      const buffer = await resp.arrayBuffer();
+      const html = new TextDecoder().decode(
+        buffer.byteLength <= MAX_BYTES ? buffer : buffer.slice(0, MAX_BYTES)
+      );
       // Extract images before stripping tags
       articleImages = extractArticleImages(html);
       // Extract main content: remove boilerplate then grab densest text block
@@ -83,6 +122,17 @@ Deno.serve(async (req) => {
         .trim();
       // Take up to 12000 chars to give Claude more article context
       articleText = cleaned.slice(0, 12000);
+
+      // Guard: if the page returned almost no text it's almost certainly
+      // a JS-rendered page (React/Next.js) whose content requires a browser.
+      if (articleText.trim().split(/\s+/).length < 80) {
+        return new Response(
+          JSON.stringify({
+            error: "Could not extract article text from that URL — the page appears to be JavaScript-rendered and requires a browser to load. Try copying and pasting the article text directly into the text box instead.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Generate captions via Claude
@@ -137,7 +187,15 @@ Rules for description:
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in Claude response: ${text.slice(0, 200)}`);
+    if (!jsonMatch) {
+      // Claude refused or couldn't generate — surface a clean user-facing error
+      return new Response(
+        JSON.stringify({
+          error: "The article didn't have enough content for ClipFrom to work with. Try a different URL, or paste the article text directly.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const data = JSON.parse(jsonMatch[0]) as {
       caption_options: string[];

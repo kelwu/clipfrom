@@ -10,18 +10,8 @@ const RAILWAY_URL = Deno.env.get("RAILWAY_URL") ?? "https://clipfrom-remotion-pr
 const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
 
 async function refundCredit(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
-  const { data } = await supabaseAdmin
-    .from("user_profiles")
-    .select("credits_remaining")
-    .eq("id", userId)
-    .maybeSingle();
-  if (data) {
-    await supabaseAdmin
-      .from("user_profiles")
-      .update({ credits_remaining: data.credits_remaining + 1 })
-      .eq("id", userId);
-    console.log(`Refunded 1 credit to user ${userId}`);
-  }
+  await supabaseAdmin.rpc("increment_credit", { uid: userId });
+  console.log(`Refunded 1 credit to user ${userId}`);
 }
 
 Deno.serve(async (req) => {
@@ -61,10 +51,11 @@ Deno.serve(async (req) => {
     const userId = callingUser.id;
 
     if (!profile?.is_admin) {
-      await supabaseAdmin
-        .from("user_profiles")
-        .update({ credits_remaining: profile!.credits_remaining - 1 })
-        .eq("id", userId);
+      // Atomic decrement — returns NULL if credits hit 0 between the check above and now
+      const { data: newCredits } = await supabaseAdmin.rpc("decrement_credit", { uid: userId });
+      if (newCredits === null || newCredits === undefined) {
+        return new Response(JSON.stringify({ error: "no_credits" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       creditDecremented = true;
     }
 
@@ -84,6 +75,11 @@ Deno.serve(async (req) => {
       ? gen.caption_options
       : Object.values(gen.caption_options);
 
+    if (captions.length !== 5) {
+      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
+      return new Response(JSON.stringify({ error: `Expected 5 captions, got ${captions.length}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const articleImages: string[] = Array.isArray(gen.article_images) ? gen.article_images : [];
     const voiceId: string | null = (profile as { preferred_voice_id?: string | null } | null)?.preferred_voice_id ?? null;
 
@@ -99,6 +95,7 @@ Deno.serve(async (req) => {
         transitionStyle,
         videoSource,
         user_email,
+        user_id: userId,
         secret: PIPELINE_SECRET,
         ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
         ...(voiceId ? { voice_id: voiceId } : {}),

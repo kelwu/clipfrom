@@ -73,6 +73,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Idempotency: return existing captions if already generated, block concurrent requests
+    const { data: existing } = await supabase
+      .from("ai_generations")
+      .select("status, caption_options, description, article_images")
+      .eq("project_id", project_id)
+      .maybeSingle();
+
+    if (existing?.status === "processing") {
+      return new Response(JSON.stringify({ error: "Caption generation already in progress for this project" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (existing?.status === "captions_ready" && Array.isArray(existing.caption_options) && existing.caption_options.length > 0) {
+      return new Response(JSON.stringify({
+        ok: true, project_id,
+        caption_options: existing.caption_options,
+        description: existing.description ?? "",
+        article_images: existing.article_images ?? [],
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Mark processing immediately
     await supabase.from("ai_generations").upsert(
       { project_id, status: "processing", caption_options: [] },

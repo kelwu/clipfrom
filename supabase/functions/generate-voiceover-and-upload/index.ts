@@ -32,7 +32,7 @@ serve(async (req) => {
       {
         method: "POST",
         headers: {
-          "xi-api-key": Deno.env.get("ELEVENLABS_API_KEY") ?? "85a53a50494da17fcbe2414ee4d25df063d791e6422c54dffbdf0d3075050092",
+          "xi-api-key": Deno.env.get("ELEVENLABS_API_KEY")!,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

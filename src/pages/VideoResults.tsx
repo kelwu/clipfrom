@@ -11,6 +11,7 @@ interface ResultData {
   caption_options?: string[] | null;
   final_caption?: string | null;
   description?: string | null;
+  video_urls?: string[] | null;
   video_url_1?: string | null;
   video_url_2?: string | null;
   video_url_3?: string | null;
@@ -59,8 +60,12 @@ export default function VideoResults() {
   const sourceMode: string = location.state?.sourceMode ?? "article";
   const showHookCard: boolean = location.state?.showHookCard ?? false;
   const captionFont: string | undefined = location.state?.captionFont;
+  const hookText: string | undefined = location.state?.hookText;
 
-  const clips = [result.video_url_1, result.video_url_2, result.video_url_3, result.video_url_4, result.video_url_5];
+  const clips = Array.isArray(result.video_urls) && result.video_urls.length > 0
+    ? result.video_urls
+    : [result.video_url_1, result.video_url_2, result.video_url_3, result.video_url_4, result.video_url_5].filter((_, i) => i < (result.caption_options?.length ?? 5));
+  const totalClips = clips.length;
   const videoUrlsFilled = clips.filter(Boolean).length;
   const stitchedReady = !!result.stitched_video_url;
   const baseCaption = editedCaption || result.description || result.final_caption || "";
@@ -180,7 +185,7 @@ export default function VideoResults() {
               "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
               "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
-            body: JSON.stringify({ project_id: projectId, user_email: userEmail, captionStyle, transitionStyle, videoSource, ...(showHookCard ? { showHookCard: true } : {}), ...(captionFont ? { captionFont } : {}) }),
+            body: JSON.stringify({ project_id: projectId, user_email: userEmail, captionStyle, transitionStyle, videoSource, ...(showHookCard ? { showHookCard: true } : {}), ...(captionFont ? { captionFont } : {}), ...(hookText ? { hookText } : {}) }),
           });
         }
 
@@ -202,7 +207,7 @@ export default function VideoResults() {
       try {
         const { data } = await supabase
           .from("ai_generations")
-          .select("id, stitched_video_url, caption_options, final_caption, description, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, status")
+          .select("id, stitched_video_url, caption_options, final_caption, description, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, status")
           .eq("project_id", projectId).maybeSingle();
         if (!data) return false;
         setResult(data);
@@ -374,7 +379,7 @@ export default function VideoResults() {
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clip Generation</span>
-                <span className="text-xs text-gray-600">{videoUrlsFilled} / 5 ready</span>
+                <span className="text-xs text-gray-600">{videoUrlsFilled} / {totalClips} ready</span>
               </div>
               <div className="flex gap-2">
                 {clips.map((url, i) => (
@@ -738,7 +743,7 @@ export default function VideoResults() {
                 { label: "Aspect Ratio", value: "9:16" },
                 { label: "Resolution", value: "1080p" },
                 { label: "Format", value: "MP4 H.264" },
-                { label: "Clips", value: "5 segments" },
+                { label: "Clips", value: `${totalClips} segments` },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between">
                   <span className="text-[11px] text-gray-600">{label}</span>

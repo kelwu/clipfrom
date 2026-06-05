@@ -125,6 +125,7 @@ export default function CaptionEditor() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<PresetId>("viral");
   const [showHookCard, setShowHookCard] = useState(false);
+  const [hookText, setHookText] = useState("");
   const [captionFont, setCaptionFont] = useState("Inter");
 
   const enabledCount = captions.filter((c) => c.enabled).length;
@@ -160,6 +161,7 @@ export default function CaptionEditor() {
         videoSource: preset.videoSource,
         showHookCard,
         captionFont,
+        ...(showHookCard && hookText.trim() ? { hookText: hookText.trim() } : {}),
       },
     });
   };
@@ -401,12 +403,12 @@ export default function CaptionEditor() {
                 );
               })()}
 
-              {/* Hook intro toggle */}
-              <div className="mt-4 px-3 py-3 rounded-lg bg-gray-900 border border-gray-800">
-                <div className="flex items-center justify-between">
+              {/* Hook intro toggle + text editor */}
+              <div className="mt-4 rounded-lg bg-gray-900 border border-gray-800 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-3">
                   <div>
                     <p className="text-[11px] font-semibold text-gray-300">Hook Intro</p>
-                    <p className="text-[10px] text-gray-600 mt-0.5">Show caption 1 as full-screen text for 2.5s</p>
+                    <p className="text-[10px] text-gray-600 mt-0.5">Full-screen text card for 2.5s before clips</p>
                   </div>
                   <button
                     type="button"
@@ -416,6 +418,22 @@ export default function CaptionEditor() {
                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${showHookCard ? "translate-x-4" : "translate-x-0.5"}`} />
                   </button>
                 </div>
+                {showHookCard && (
+                  <div className="px-3 pb-3 border-t border-gray-800 pt-2.5">
+                    <p className="text-[10px] text-gray-500 mb-1.5">Hook text <span className="text-gray-700">(leave blank to use caption 1)</span></p>
+                    <input
+                      type="text"
+                      value={hookText}
+                      onChange={e => setHookText(e.target.value)}
+                      placeholder={captions[0]?.text || "Your hook here…"}
+                      maxLength={120}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-md px-2.5 py-1.5 text-[12px] text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 transition-colors"
+                    />
+                    {hookText.length > 80 && (
+                      <p className="text-[10px] text-amber-500 mt-1">{hookText.length}/120 — shorter hooks perform better</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Caption font selector */}

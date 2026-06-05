@@ -16,10 +16,18 @@ export interface TranscriptWord {
   is_filler?: boolean;
 }
 
+export type BrollLayout =
+  | "floating"
+  | "top-third"
+  | "top-half"
+  | "top-two-thirds"
+  | "corner";
+
 export interface BrollSegment {
   from: number;
   durationInFrames: number;
   clipUrl: string;
+  layout?: BrollLayout;
 }
 
 export interface KeepSegment {
@@ -181,7 +189,23 @@ function renderWords(
   });
 }
 
-const BrollOverlay: React.FC<{ clipUrl: string; durationInFrames: number }> = ({ clipUrl, durationInFrames }) => {
+function brollStyle(layout: BrollLayout): React.CSSProperties {
+  const base: React.CSSProperties = {
+    position: "absolute", zIndex: 5, overflow: "hidden",
+    boxShadow: "0 12px 48px rgba(0,0,0,0.75), 0 0 0 3px rgba(255,255,255,0.08)",
+  };
+  switch (layout) {
+    case "top-third":      return { ...base, top: 0, left: 0, right: 0, height: 640, borderRadius: "0 0 40px 40px" };
+    case "top-half":       return { ...base, top: 0, left: 0, right: 0, height: 960, borderRadius: "0 0 40px 40px" };
+    case "top-two-thirds": return { ...base, top: 0, left: 0, right: 0, height: 1280, borderRadius: "0 0 48px 48px" };
+    case "corner":         return { ...base, top: 100, right: 36, width: 288, height: 512, borderRadius: 28 };
+    default:               return { ...base, top: 80, left: 36, right: 36, height: 570, borderRadius: 40 };
+  }
+}
+
+const BrollOverlay: React.FC<{ clipUrl: string; durationInFrames: number; layout?: BrollLayout }> = ({
+  clipUrl, durationInFrames, layout = "floating",
+}) => {
   const frame = useCurrentFrame();
   const FADE = 8;
   const opacity = interpolate(
@@ -191,20 +215,8 @@ const BrollOverlay: React.FC<{ clipUrl: string; durationInFrames: number }> = ({
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
   return (
-    <div style={{
-      position: "absolute",
-      top: 80, left: 36, right: 36,
-      height: 570,
-      zIndex: 5,
-      borderRadius: 40,
-      overflow: "hidden",
-      opacity,
-      boxShadow: "0 12px 48px rgba(0,0,0,0.75), 0 0 0 3px rgba(255,255,255,0.08)",
-    }}>
-      <Video
-        src={clipUrl}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-      />
+    <div style={{ ...brollStyle(layout), opacity }}>
+      <Video src={clipUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     </div>
   );
 };
@@ -281,7 +293,7 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
 
       {brollSegments.map((seg, i) => (
         <Sequence key={i} from={seg.from} durationInFrames={seg.durationInFrames}>
-          <BrollOverlay clipUrl={seg.clipUrl} durationInFrames={seg.durationInFrames} />
+          <BrollOverlay clipUrl={seg.clipUrl} durationInFrames={seg.durationInFrames} layout={seg.layout} />
         </Sequence>
       ))}
 

@@ -4,7 +4,16 @@ import { Player } from "@remotion/player";
 import AppShell from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
 import { UserVideoCaption } from "@/remotion/UserVideoCaption";
-import type { TranscriptWord, KeepSegment } from "@/remotion/UserVideoCaption";
+import type { TranscriptWord, KeepSegment, BrollLayout } from "@/remotion/UserVideoCaption";
+
+const BROLL_LAYOUTS: { value: BrollLayout | "auto"; label: string; desc: string }[] = [
+  { value: "auto",           label: "Auto",         desc: "Rotates through styles for variety" },
+  { value: "top-half",       label: "Half screen",  desc: "Upper 50%, face below" },
+  { value: "top-third",      label: "One-third",    desc: "Upper 33%, mostly face" },
+  { value: "top-two-thirds", label: "Two-thirds",   desc: "Upper 67%, small face strip" },
+  { value: "floating",       label: "Floating",     desc: "Framed panel with side margins" },
+  { value: "corner",         label: "Corner PiP",   desc: "Small top-right panel" },
+];
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -121,6 +130,7 @@ export default function VideoStyle() {
   // User settings
   const [captionStyle,    setCaptionStyle]    = useState("pill");
   const [removeFillers,   setRemoveFillers]   = useState(false);
+  const [brollLayout,     setBrollLayout]     = useState<BrollLayout | "auto">("auto");
   const [overrides,       setOverrides]       = useState<Set<number>>(new Set());
   const [showReview,      setShowReview]      = useState(false);
   const [saving,          setSaving]          = useState(false);
@@ -177,6 +187,7 @@ export default function VideoStyle() {
       .update({
         remove_fillers:   removeFillers,
         filler_overrides: [...overrides],
+        broll_layout:     brollLayout === "auto" ? null : brollLayout,
       })
       .eq("project_id", projectId);
     setSaving(false);
@@ -386,6 +397,30 @@ export default function VideoStyle() {
               </p>
             </div>
           )}
+
+          {/* B-roll layout picker */}
+          <div style={{ marginTop: 16, marginBottom: 16 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: C.fgDim, letterSpacing: "0.08em", textTransform: "uppercase", margin: "0 0 10px" }}>
+              B-roll Layout
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {BROLL_LAYOUTS.map(opt => {
+                const sel = brollLayout === opt.value;
+                return (
+                  <button key={opt.value} type="button" onClick={() => setBrollLayout(opt.value)} style={{
+                    padding: "10px 8px",
+                    border: `1.5px solid ${sel ? C.accent : C.strokeMed}`,
+                    borderRadius: 10,
+                    background: sel ? `oklch(72% 0.17 280 / 0.1)` : C.surface,
+                    color: C.fg, cursor: "pointer", textAlign: "left",
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: 12 }}>{opt.label}</div>
+                    <div style={{ color: C.fgDim, fontSize: 10, marginTop: 2, lineHeight: 1.3 }}>{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Info blurb */}
           <div style={{

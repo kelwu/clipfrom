@@ -181,6 +181,34 @@ function renderWords(
   });
 }
 
+const BrollOverlay: React.FC<{ clipUrl: string; durationInFrames: number }> = ({ clipUrl, durationInFrames }) => {
+  const frame = useCurrentFrame();
+  const FADE = 8;
+  const opacity = interpolate(
+    frame,
+    [0, FADE, durationInFrames - FADE, durationInFrames],
+    [0, 1, 1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  return (
+    <div style={{
+      position: "absolute",
+      top: 80, left: 36, right: 36,
+      height: 570,
+      zIndex: 5,
+      borderRadius: 40,
+      overflow: "hidden",
+      opacity,
+      boxShadow: "0 12px 48px rgba(0,0,0,0.75), 0 0 0 3px rgba(255,255,255,0.08)",
+    }}>
+      <Video
+        src={clipUrl}
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+      />
+    </div>
+  );
+};
+
 export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
   videoUrl,
   transcriptWords = [],
@@ -253,12 +281,7 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
 
       {brollSegments.map((seg, i) => (
         <Sequence key={i} from={seg.from} durationInFrames={seg.durationInFrames}>
-          <div style={{ position: "absolute", inset: 0, zIndex: 5 }}>
-            <Video
-              src={seg.clipUrl}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </div>
+          <BrollOverlay clipUrl={seg.clipUrl} durationInFrames={seg.durationInFrames} />
         </Sequence>
       ))}
 

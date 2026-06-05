@@ -102,6 +102,7 @@ Deno.serve(async (req) => {
         ...(showHookCard ? { showHookCard: true } : {}),
         ...(captionFont ? { captionFont } : {}),
         ...(hookText ? { hookText } : {}),
+        skipRender: true, // stop after clips_ready so user can review before render
       }),
     });
 

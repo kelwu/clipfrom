@@ -211,6 +211,12 @@ export default function VideoResults() {
           .eq("project_id", projectId).maybeSingle();
         if (!data) return false;
         setResult(data);
+        // Article mode: when clips are ready, navigate to review page before rendering
+        if (sourceMode !== "video" && data.status === "videos_ready" && !data.stitched_video_url) {
+          clearInterval(pollingRef.current!);
+          navigate(`/review/${projectId}`);
+          return true;
+        }
         if (data.stitched_video_url) {
           clearInterval(pollingRef.current!);
           if (!isInitialCheck) {

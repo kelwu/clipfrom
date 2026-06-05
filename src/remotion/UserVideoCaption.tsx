@@ -58,6 +58,31 @@ function remapWordsToOutput(words: TranscriptWord[], keepSegments: KeepSegment[]
 const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 const WINDOW_SIZE = 3;
 
+const ZOOM_SCALE       = 1.15;
+const WORDS_PER_TOGGLE = 12;
+const ZOOM_TRANSITION  = 15;
+
+function getZoomScale(words: TranscriptWord[], frame: number): number {
+  if (words.length === 0) return 1.0;
+  let currentWordIdx = 0;
+  for (let i = 0; i < words.length; i++) {
+    if (frame >= words[i].startFrame) currentWordIdx = i;
+    else break;
+  }
+  const period      = Math.floor(currentWordIdx / WORDS_PER_TOGGLE);
+  const isZoomedIn  = period % 2 === 1;
+  const targetScale = isZoomedIn ? ZOOM_SCALE : 1.0;
+  const prevScale   = isZoomedIn ? 1.0 : ZOOM_SCALE;
+  const periodStartIdx  = period * WORDS_PER_TOGGLE;
+  const transitionStart = periodStartIdx < words.length ? words[periodStartIdx].startFrame : 0;
+  return interpolate(
+    frame - transitionStart,
+    [0, ZOOM_TRANSITION],
+    [prevScale, targetScale],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+}
+
 function findActiveWordIndex(words: TranscriptWord[], frame: number): number {
   const active = words.findIndex(w => frame >= w.startFrame && frame <= w.endFrame);
   if (active >= 0) return active;
@@ -155,6 +180,7 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
     ? remapWordsToOutput(sourceWords, keepSegments)
     : sourceWords;
   const activeIndex = words.length > 0 ? findActiveWordIndex(words, frame) : -1;
+  const zoomScale = getZoomScale(words, frame);
 
   const captionOpacity = activeIndex >= 0
     ? interpolate(frame, [words[activeIndex].startFrame, words[activeIndex].startFrame + 8], [0, 1], {
@@ -174,31 +200,39 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
     <div style={{ width: "100%", height: "100%", background: "#000", position: "relative" }}>
 
       {videoUrl && (
-        keepSegments && keepSegments.length > 0 ? (
-          (() => {
-            let cursor = 0;
-            return keepSegments.map((seg, i) => {
-              const segLen = seg.source_end_frame - seg.source_start_frame;
-              const from = cursor;
-              cursor += segLen;
-              return (
-                <Sequence key={`keep-${i}`} from={from} durationInFrames={segLen}>
-                  <Video
-                    src={videoUrl}
-                    startFrom={seg.source_start_frame}
-                    endAt={seg.source_end_frame}
-                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </Sequence>
-              );
-            });
-          })()
-        ) : (
-          <Video
-            src={videoUrl}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        )
+        <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", inset: 0,
+            transform: `scale(${zoomScale})`,
+            transformOrigin: "50% 35%",
+          }}>
+            {keepSegments && keepSegments.length > 0 ? (
+              (() => {
+                let cursor = 0;
+                return keepSegments.map((seg, i) => {
+                  const segLen = seg.source_end_frame - seg.source_start_frame;
+                  const from = cursor;
+                  cursor += segLen;
+                  return (
+                    <Sequence key={`keep-${i}`} from={from} durationInFrames={segLen}>
+                      <Video
+                        src={videoUrl}
+                        startFrom={seg.source_start_frame}
+                        endAt={seg.source_end_frame}
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </Sequence>
+                  );
+                });
+              })()
+            ) : (
+              <Video
+                src={videoUrl}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            )}
+          </div>
+        </div>
       )}
 
       {brollSegments.map((seg, i) => (

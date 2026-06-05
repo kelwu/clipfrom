@@ -58,25 +58,41 @@ function remapWordsToOutput(words: TranscriptWord[], keepSegments: KeepSegment[]
 const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 const WINDOW_SIZE = 3;
 
-const ZOOM_SCALE       = 1.15;
-const WORDS_PER_TOGGLE = 12;
-const ZOOM_TRANSITION  = 15;
+const ZOOM_SCALE      = 1.15;
+const ZOOM_TRANSITION = 18;
+const PAUSE_THRESHOLD = 15;
+const MIN_ZOOM_HOLD   = 45;
+
+interface ZoomEvent { frame: number; zoomedIn: boolean; }
+
+function computeZoomEvents(words: TranscriptWord[]): ZoomEvent[] {
+  const events: ZoomEvent[] = [{ frame: 0, zoomedIn: false }];
+  let zoomedIn = false;
+  let lastEventFrame = 0;
+  for (let i = 1; i < words.length; i++) {
+    const pause = words[i].startFrame - words[i - 1].endFrame;
+    const holdTime = words[i].startFrame - lastEventFrame;
+    if (pause >= PAUSE_THRESHOLD && holdTime >= MIN_ZOOM_HOLD) {
+      zoomedIn = !zoomedIn;
+      events.push({ frame: words[i].startFrame, zoomedIn });
+      lastEventFrame = words[i].startFrame;
+    }
+  }
+  return events;
+}
 
 function getZoomScale(words: TranscriptWord[], frame: number): number {
   if (words.length === 0) return 1.0;
-  let currentWordIdx = 0;
-  for (let i = 0; i < words.length; i++) {
-    if (frame >= words[i].startFrame) currentWordIdx = i;
+  const events = computeZoomEvents(words);
+  let current = events[0];
+  for (const ev of events) {
+    if (ev.frame <= frame) current = ev;
     else break;
   }
-  const period      = Math.floor(currentWordIdx / WORDS_PER_TOGGLE);
-  const isZoomedIn  = period % 2 === 1;
-  const targetScale = isZoomedIn ? ZOOM_SCALE : 1.0;
-  const prevScale   = isZoomedIn ? 1.0 : ZOOM_SCALE;
-  const periodStartIdx  = period * WORDS_PER_TOGGLE;
-  const transitionStart = periodStartIdx < words.length ? words[periodStartIdx].startFrame : 0;
+  const targetScale = current.zoomedIn ? ZOOM_SCALE : 1.0;
+  const prevScale   = current.zoomedIn ? 1.0 : ZOOM_SCALE;
   return interpolate(
-    frame - transitionStart,
+    frame - current.frame,
     [0, ZOOM_TRANSITION],
     [prevScale, targetScale],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }

@@ -184,9 +184,8 @@ const ArticleInput = () => {
     if (inputMode === "video") {
       if (!videoFile) { toast.error("Please select a video file"); return; }
       if (!user) { navigate("/login?returnTo=/"); return; }
-      // Free-tier Supabase Storage hard-caps uploads at 50 MB (server-side, not configurable).
-      // On Pro tier this becomes 5 GB — raise MAX_SIZE_MB and remove this comment when upgraded.
-      const MAX_SIZE_MB = 50;
+      // Supabase Pro tier — limit raised to 200 MB. TUS handles chunked upload.
+      const MAX_SIZE_MB = 200;
       if (videoFile.size > MAX_SIZE_MB * 1024 * 1024) {
         toast.error(`Video is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Maximum is ${MAX_SIZE_MB} MB.`);
         return;
@@ -547,9 +546,9 @@ const ArticleInput = () => {
                           {videoFile ? (
                             <div>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>{videoFile.name}</p>
-                              {videoFile.size > 50 * 1024 * 1024 ? (
+                              {videoFile.size > 200 * 1024 * 1024 ? (
                                 <p style={{ margin: "4px 0 0", fontSize: 11, color: "#f87171", fontWeight: 600 }}>
-                                  {(videoFile.size / 1024 / 1024).toFixed(1)} MB — exceeds the 50 MB limit. Please trim or compress your video.
+                                  {(videoFile.size / 1024 / 1024).toFixed(1)} MB — exceeds the 200 MB limit. Please trim or compress your video.
                                 </p>
                               ) : (
                                 <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>{(videoFile.size / 1024 / 1024).toFixed(1)} MB · click to change</p>
@@ -558,7 +557,7 @@ const ArticleInput = () => {
                           ) : (
                             <div>
                               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Click to upload your video</p>
-                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · max 50 MB</p>
+                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · max 200 MB</p>
                             </div>
                           )}
                         </label>
@@ -584,7 +583,7 @@ const ArticleInput = () => {
                     <div style={{ padding: 10 }}>
                       {(() => {
                         const outOfCredits = user && !isAdmin && credits !== null && credits < 1;
-                        const videoTooLarge = inputMode === "video" && !!videoFile && videoFile.size > 50 * 1024 * 1024;
+                        const videoTooLarge = inputMode === "video" && !!videoFile && videoFile.size > 200 * 1024 * 1024;
                         return (
                           <button
                             type="submit"
@@ -599,7 +598,7 @@ const ArticleInput = () => {
                               transition: "all 0.15s",
                             }}
                           >
-                            {outOfCredits ? "No credits remaining" : videoTooLarge ? "Video too large (max 50 MB)" : inputMode === "video" ? "Upload & Transcribe" : "Generate my video"}
+                            {outOfCredits ? "No credits remaining" : videoTooLarge ? "Video too large (max 200 MB)" : inputMode === "video" ? "Upload & Transcribe" : "Generate my video"}
                             {!outOfCredits && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>}
                           </button>
                         );

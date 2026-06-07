@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,8 @@ interface Profile {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   preferred_voice_id: string | null;
+  cloned_voice_id: string | null;
+  cloned_voice_name: string | null;
 }
 
 const VOICES = [
@@ -52,16 +54,78 @@ export default function Settings() {
   const [connectingIg, setConnectingIg] = useState(false);
   const [loadingPortal, setLoadingPortal] = useState(false);
   const [savingVoice, setSavingVoice] = useState(false);
+  const [cloningVoice, setCloningVoice] = useState(false);
+  const [deletingClone, setDeletingClone] = useState(false);
+  const cloneInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCloneVoice = async (file: File) => {
+    if (!user || !session) return;
+    setCloningVoice(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("name", user.email?.split("@")[0] || "My Voice");
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/clone-voice`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Voice cloning failed");
+        return;
+      }
+      setProfile(p => p ? { ...p, cloned_voice_id: data.voice_id, cloned_voice_name: data.name, preferred_voice_id: data.voice_id } : p);
+      toast.success("Voice cloned successfully — set as your default");
+    } catch (err) {
+      toast.error("Could not reach the voice cloning service");
+    } finally {
+      setCloningVoice(false);
+      if (cloneInputRef.current) cloneInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteClone = async () => {
+    if (!user || !session) return;
+    if (!confirm("Delete your cloned voice? You can re-clone any time.")) return;
+    setDeletingClone(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-cloned-voice`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? "Could not delete voice");
+        return;
+      }
+      setProfile(p => p ? {
+        ...p,
+        cloned_voice_id: null,
+        cloned_voice_name: null,
+        preferred_voice_id: p.preferred_voice_id === p.cloned_voice_id ? null : p.preferred_voice_id,
+      } : p);
+      toast.success("Cloned voice removed");
+    } finally {
+      setDeletingClone(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
     supabase
       .from("user_profiles")
-      .select("instagram_account_id, instagram_username, instagram_token_expires_at, caption_outro, credits_remaining, stripe_customer_id, stripe_subscription_id, preferred_voice_id")
+      .select("instagram_account_id, instagram_username, instagram_token_expires_at, caption_outro, credits_remaining, stripe_customer_id, stripe_subscription_id, preferred_voice_id, cloned_voice_id, cloned_voice_name")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
-        setProfile(data ?? { instagram_account_id: null, instagram_username: null, instagram_token_expires_at: null, caption_outro: null, credits_remaining: null, stripe_customer_id: null, stripe_subscription_id: null, preferred_voice_id: null });
+        setProfile(data ?? { instagram_account_id: null, instagram_username: null, instagram_token_expires_at: null, caption_outro: null, credits_remaining: null, stripe_customer_id: null, stripe_subscription_id: null, preferred_voice_id: null, cloned_voice_id: null, cloned_voice_name: null });
         setOutro(data?.caption_outro ?? "");
       });
   }, [user?.id]);
@@ -284,6 +348,71 @@ export default function Settings() {
             )}
           </Section>
 
+          {/* Voice Cloning */}
+          <Section title="Your Voice (Cloned)" description="Upload a 30–60s audio sample of your voice. ClipFrom will clone it so your videos sound like you, not a generic AI voice.">
+            {profile === null ? (
+              <div className="h-20 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+            ) : profile.cloned_voice_id ? (
+              <div className="flex items-center justify-between gap-3 px-4 py-4 rounded-xl border border-violet-500/40 bg-violet-500/5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 bg-violet-500/20 text-violet-300">
+                    ✓
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-white leading-tight">
+                      {profile.cloned_voice_name ?? "Your voice"}
+                    </p>
+                    <p className="text-[10px] text-gray-500 leading-tight mt-0.5">
+                      Cloned and ready · select "My Voice" below to use
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => cloneInputRef.current?.click()}
+                    disabled={cloningVoice || deletingClone}
+                    className="px-3 py-1.5 text-[11px] font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteClone}
+                    disabled={cloningVoice || deletingClone}
+                    className="px-3 py-1.5 text-[11px] font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/60 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {deletingClone ? "Removing…" : "Remove"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => cloneInputRef.current?.click()}
+                disabled={cloningVoice}
+                className="w-full px-4 py-5 rounded-xl border border-dashed border-gray-700 bg-gray-900 hover:border-violet-500 hover:bg-violet-500/5 transition-colors text-center disabled:opacity-50"
+              >
+                <p className="text-xs font-semibold text-white mb-1">
+                  {cloningVoice ? "Cloning voice — about 30 seconds…" : "Upload audio sample"}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  MP3, M4A, WAV · 30–60 seconds of clean speech · max 10 MB
+                </p>
+              </button>
+            )}
+            <input
+              ref={cloneInputRef}
+              type="file"
+              accept="audio/*"
+              style={{ display: "none" }}
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) handleCloneVoice(f);
+              }}
+            />
+          </Section>
+
           {/* Voice */}
           <Section title="Voiceover" description="Choose the voice used for all your videos. Generate a test video after selecting to hear it.">
             {profile === null ? (
@@ -318,6 +447,29 @@ export default function Settings() {
                       {isSelected && (
                         <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
                       )}
+                    </button>
+                  );
+                })()}
+                {/* My Voice (cloned) — shown when user has cloned their voice */}
+                {profile.cloned_voice_id && (() => {
+                  const isSelected = profile.preferred_voice_id === profile.cloned_voice_id;
+                  return (
+                    <button
+                      key="my-voice"
+                      onClick={() => handleSelectVoice(profile.cloned_voice_id)}
+                      disabled={savingVoice}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                        isSelected ? "border-violet-500 bg-violet-500/10" : "border-gray-800 bg-gray-900 hover:border-gray-600"
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-violet-500/20 text-violet-300">
+                        ★
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white leading-tight">My Voice</p>
+                        <p className="text-[10px] text-gray-500 leading-tight truncate">Your cloned voice</p>
+                      </div>
+                      {isSelected && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />}
                     </button>
                   );
                 })()}

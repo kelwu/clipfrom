@@ -100,7 +100,7 @@ const VIDEO_LOG_LINES = [
 ];
 
 const ArticleInput = () => {
-  const [inputMode, setInputMode] = useState<"url" | "text" | "video">("url");
+  const [inputMode, setInputMode] = useState<"url" | "text" | "video" | "long_video">("url");
   const [articleUrl, setArticleUrl] = useState("");
   const [articleText, setArticleText] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -180,8 +180,8 @@ const ArticleInput = () => {
       return;
     }
 
-    // ── Video upload mode ──────────────────────────────────────────────────────
-    if (inputMode === "video") {
+    // ── Video upload modes (talking head + long video) ────────────────────────
+    if (inputMode === "video" || inputMode === "long_video") {
       if (!videoFile) { toast.error("Please select a video file"); return; }
       if (!user) { navigate("/login?returnTo=/"); return; }
       // Supabase Pro tier — limit raised to 200 MB. TUS handles chunked upload.
@@ -197,7 +197,7 @@ const ArticleInput = () => {
       try {
         const { data: projectData, error: projectError } = await supabase
           .from("projects")
-          .insert({ source_mode: "video", status: "processing", user_id: user.id })
+          .insert({ source_mode: inputMode === "long_video" ? "long_video" : "video", status: "processing", user_id: user.id })
           .select("id").single();
         if (projectError) throw new Error("Failed to create project");
         projectId = projectData.id;
@@ -276,7 +276,11 @@ const ArticleInput = () => {
               const wordCount = Array.isArray(data.transcript_words)
                 ? (data.transcript_words as { type: string }[]).filter(w => w.type === "word").length
                 : 0;
-              navigate(`/video-style/${projectId}`, { state: { userEmail: resolvedEmail, wordCount } });
+              if (inputMode === "long_video") {
+                navigate(`/highlight-picker/${projectId}`, { state: { userEmail: resolvedEmail, wordCount } });
+              } else {
+                navigate(`/video-style/${projectId}`, { state: { userEmail: resolvedEmail, wordCount } });
+              }
             }
           } catch { /* continue polling */ }
         }, 3000);
@@ -381,10 +385,10 @@ const ArticleInput = () => {
           <div className="bg-[#0d0d0d] border border-gray-800 rounded-xl overflow-hidden text-left">
             <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-800 bg-[#111]">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" /><div className="w-3 h-3 rounded-full bg-[#febc2e]" /><div className="w-3 h-3 rounded-full bg-[#28c840]" />
-              <span className="ml-3 text-xs text-gray-500 font-medium select-none">{inputMode === "video" ? "AI Studio — Transcribing" : "AI Studio — Processing"}</span>
+              <span className="ml-3 text-xs text-gray-500 font-medium select-none">{(inputMode === "video" || inputMode === "long_video") ? "AI Studio — Transcribing" : "AI Studio — Processing"}</span>
             </div>
             <div className="p-4 font-mono text-xs space-y-1.5 min-h-[160px]">
-              {(inputMode === "video" ? VIDEO_LOG_LINES : LOG_LINES).slice(0, visibleLines).map((line, i) => (
+              {((inputMode === "video" || inputMode === "long_video") ? VIDEO_LOG_LINES : LOG_LINES).slice(0, visibleLines).map((line, i) => (
                 <div key={i} className={`${line.color} leading-relaxed`}>
                   {line.text}
                   {i === visibleLines - 1 && <span className="inline-block w-1.5 h-3.5 bg-emerald-400 ml-1 animate-pulse align-middle" />}
@@ -501,9 +505,9 @@ const ArticleInput = () => {
                     boxShadow: `0 0 0 1px oklch(72% 0.17 280 / 0.08), 0 32px 64px oklch(0% 0 0 / 0.5), 0 0 80px oklch(72% 0.17 280 / 0.07)` }}>
                     {/* Mode tabs — inside the card */}
                     <div style={{ display: "flex", gap: 3, padding: 5, background: `oklch(12% 0.015 255)`, borderBottom: `1px solid ${C.strokeSoft}` }}>
-                      {([["url", "URL"], ["text", "Paste Text"], ["video", "Upload Video"]] as const).map(([mode, label]) => (
+                      {([["url", "URL"], ["text", "Paste Text"], ["video", "Short Video"], ["long_video", "Long Video"]] as const).map(([mode, label]) => (
                         <button key={mode} type="button" onClick={() => setInputMode(mode)}
-                          style={{ flex: 1, padding: "7px 12px", borderRadius: 10, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                          style={{ flex: 1, padding: "7px 6px", borderRadius: 10, border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
                             background: inputMode === mode ? C.accent : "transparent",
                             color: inputMode === mode ? "oklch(11% 0.018 255)" : C.fgMuted,
                             boxShadow: inputMode === mode ? "0 2px 8px oklch(72% 0.17 280 / 0.3)" : "none" }}>
@@ -556,8 +560,19 @@ const ArticleInput = () => {
                             </div>
                           ) : (
                             <div>
-                              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Click to upload your video</p>
-                              <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · max 200 MB</p>
+                              {inputMode === "long_video" ? (
+                                <>
+                                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Upload a podcast or interview</p>
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>AI picks 3–5 highlight moments → renders each as a Short</p>
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · max 200 MB</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Upload your talking-head video</p>
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>Captions + B-roll + filler removal</p>
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · max 200 MB</p>
+                                </>
+                              )}
                             </div>
                           )}
                         </label>
@@ -583,7 +598,7 @@ const ArticleInput = () => {
                     <div style={{ padding: 10 }}>
                       {(() => {
                         const outOfCredits = user && !isAdmin && credits !== null && credits < 1;
-                        const videoTooLarge = inputMode === "video" && !!videoFile && videoFile.size > 200 * 1024 * 1024;
+                        const videoTooLarge = (inputMode === "video" || inputMode === "long_video") && !!videoFile && videoFile.size > 200 * 1024 * 1024;
                         return (
                           <button
                             type="submit"

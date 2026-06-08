@@ -45,6 +45,7 @@ export default function VideoResults() {
   const [igConnected, setIgConnected] = useState<boolean | null>(null);
   const [igUsername, setIgUsername] = useState("");
   const [connectingIg, setConnectingIg] = useState(false);
+  const [videoSegments, setVideoSegments] = useState<{ id: string; segment_index: number; title: string; status: string; output_url: string | null }[]>([]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const triggeredRef = useRef(false);
 
@@ -151,6 +152,29 @@ export default function VideoResults() {
         description: "The future of AI is being written right now — and it's moving faster than anyone predicted. Three breakthroughs in the last 6 months have quietly changed everything we thought we knew. #AI #tech #futureofwork",
       });
       return;
+    }
+
+    // Long video mode: segments are rendered from HighlightPicker — no generation trigger here.
+    // Just poll segments + ai_gen status.
+    if (sourceMode === "long_video") {
+      const pollSegments = async () => {
+        const { data: segs } = await supabase
+          .from("video_segments")
+          .select("id, segment_index, title, status, output_url")
+          .eq("project_id", projectId)
+          .order("segment_index");
+        if (segs) setVideoSegments(segs);
+
+        const { data: gen } = await supabase
+          .from("ai_generations").select("status").eq("project_id", projectId).maybeSingle();
+        if (gen?.status === "complete") {
+          clearInterval(pollingRef.current!);
+          toast.success("Your shorts are ready!");
+        }
+      };
+      pollSegments();
+      pollingRef.current = setInterval(pollSegments, 8000);
+      return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
     }
 
     const triggerVideoGeneration = async () => {
@@ -330,6 +354,108 @@ export default function VideoResults() {
 
   const contentPreview = content.length > 200 ? content.slice(0, 200) + "…" : content;
   const firstCaption = displayCaptions[0] || "";
+
+  // ── Long video: multi-segment results ────────────────────────────────────────
+  if (sourceMode === "long_video") {
+    const allDone = videoSegments.length > 0 && videoSegments.every(s => s.status === "complete" || s.status === "error");
+    const anyReady = videoSegments.some(s => s.status === "complete" && s.output_url);
+
+    return (
+      <AppShell>
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => { clearInterval(pollingRef.current!); navigate("/"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+              Back
+            </button>
+            <div className="h-4 w-px bg-gray-800" />
+            <span className="text-sm font-medium text-white">Your Shorts</span>
+            {!allDone && (
+              <span className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-0.5 text-[10px] text-amber-400 font-semibold uppercase tracking-wide">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                RENDERING
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-2xl mx-auto space-y-5">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">Your highlights</h1>
+              <p className="text-gray-400 text-sm">
+                {allDone
+                  ? `${videoSegments.filter(s => s.status === "complete").length} short${videoSegments.filter(s => s.status === "complete").length !== 1 ? "s" : ""} ready to download`
+                  : "Rendering your shorts — check back in a few minutes or wait here."}
+              </p>
+            </div>
+
+            {videoSegments.length === 0 ? (
+              <div className="flex items-center gap-3 text-gray-400 py-8">
+                <Spinner size={20} />
+                <span className="text-sm">Waiting for render to start…</span>
+              </div>
+            ) : (
+              videoSegments.map((seg) => (
+                <div key={seg.id} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-gray-800 flex items-center justify-center text-xs font-bold text-white">
+                        {seg.segment_index + 1}
+                      </div>
+                      <span className="text-sm font-semibold text-white">{seg.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {seg.status === "complete" && seg.output_url && (
+                        <a href={seg.output_url} download target="_blank" rel="noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          Download
+                        </a>
+                      )}
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                        seg.status === "complete" ? "bg-emerald-900/40 text-emerald-400" :
+                        seg.status === "error" ? "bg-red-900/40 text-red-400" :
+                        seg.status === "rendering" ? "bg-amber-900/40 text-amber-400" :
+                        "bg-gray-800 text-gray-500"
+                      }`}>
+                        {seg.status === "complete" ? "Ready" :
+                         seg.status === "error" ? "Error" :
+                         seg.status === "rendering" ? "Rendering…" : "Pending"}
+                      </span>
+                    </div>
+                  </div>
+                  {seg.status === "complete" && seg.output_url && (
+                    <div className="p-4 flex justify-center">
+                      <video
+                        src={seg.output_url}
+                        controls
+                        playsInline
+                        className="rounded-xl"
+                        style={{ maxHeight: 360, maxWidth: "100%", aspectRatio: "9/16", objectFit: "cover" }}
+                      />
+                    </div>
+                  )}
+                  {(seg.status === "rendering" || seg.status === "pending") && (
+                    <div className="px-5 py-4 flex items-center gap-3 text-gray-500 text-sm">
+                      <Spinner size={14} />
+                      {seg.status === "rendering" ? "Rendering with Remotion Lambda…" : "Queued"}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {!anyReady && !allDone && (
+              <p className="text-center text-xs text-gray-600 pt-2">
+                Each short takes ~3 minutes. We'll email you when they're done.
+              </p>
+            )}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   // ── Processing Engine (loading state) ───────────────────────────────────────
   if (!stitchedReady) {

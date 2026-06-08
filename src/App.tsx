@@ -20,6 +20,7 @@ import UpgradeSuccess from "./pages/UpgradeSuccess";
 import UpdatePassword from "./pages/UpdatePassword";
 import InstagramCallback from "./pages/InstagramCallback";
 import ClipReview from "./pages/ClipReview";
+import HighlightPicker from "./pages/HighlightPicker";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/video-style/:projectId" element={<ProtectedRoute><VideoStyle /></ProtectedRoute>} />
             <Route path="/results/:projectId" element={<ProtectedRoute><VideoResults /></ProtectedRoute>} />
             <Route path="/review/:projectId" element={<ProtectedRoute><ClipReview /></ProtectedRoute>} />
+            <Route path="/highlight-picker/:projectId" element={<ProtectedRoute><HighlightPicker /></ProtectedRoute>} />
             <Route path="/studio/:projectId" element={<ProtectedRoute><Studio /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/upgrade/success" element={<ProtectedRoute><UpgradeSuccess /></ProtectedRoute>} />

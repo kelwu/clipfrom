@@ -45,11 +45,12 @@ const CAPTION_STYLES: { value: CaptionStyle; label: string; desc: string }[] = [
 
 const BROLL_LAYOUTS: { value: BrollLayout; label: string }[] = [
   { value: "auto", label: "Auto-rotate" },
-  { value: "floating", label: "Floating panel" },
-  { value: "top-half", label: "Top half" },
-  { value: "top-third", label: "Top third" },
-  { value: "top-two-thirds", label: "Top two-thirds" },
+  { value: "bottom-third", label: "Bottom third" },
   { value: "corner", label: "Corner PiP" },
+  { value: "floating", label: "Floating panel" },
+  { value: "top-third", label: "Top third" },
+  { value: "top-half", label: "Top half" },
+  { value: "top-two-thirds", label: "Top two-thirds" },
 ];
 
 const Spinner = ({ size = 14 }: { size?: number }) => (

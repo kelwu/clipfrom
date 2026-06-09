@@ -7,12 +7,13 @@ import { UserVideoCaption } from "@/remotion/UserVideoCaption";
 import type { TranscriptWord, KeepSegment, BrollLayout } from "@/remotion/UserVideoCaption";
 
 const BROLL_LAYOUTS: { value: BrollLayout | "auto"; label: string; desc: string }[] = [
-  { value: "auto",           label: "Auto",         desc: "Rotates through styles for variety" },
-  { value: "top-half",       label: "Half screen",  desc: "Upper 50%, face below" },
-  { value: "top-third",      label: "One-third",    desc: "Upper 33%, mostly face" },
-  { value: "top-two-thirds", label: "Two-thirds",   desc: "Upper 67%, small face strip" },
-  { value: "floating",       label: "Floating",     desc: "Framed panel with side margins" },
-  { value: "corner",         label: "Corner PiP",   desc: "Small top-right panel" },
+  { value: "auto",           label: "Auto",          desc: "Bottom + corner rotation — avoids face" },
+  { value: "bottom-third",   label: "Bottom third",  desc: "Lower 33%, face always visible" },
+  { value: "corner",         label: "Corner PiP",    desc: "Small top-right panel" },
+  { value: "floating",       label: "Floating",      desc: "Framed panel with side margins" },
+  { value: "top-third",      label: "Top third",     desc: "Upper 33%, face in lower portion" },
+  { value: "top-half",       label: "Top half",      desc: "Upper 50%, face below" },
+  { value: "top-two-thirds", label: "Top two-thirds", desc: "Upper 67%, small face strip" },
 ];
 
 // ── Constants ─────────────────────────────────────────────────────────────────

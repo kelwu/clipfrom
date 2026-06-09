@@ -22,7 +22,8 @@ export type BrollLayout =
   | "top-third"
   | "top-half"
   | "top-two-thirds"
-  | "corner";
+  | "corner"
+  | "bottom-third";
 
 export interface BrollSegment {
   from: number;
@@ -236,6 +237,7 @@ function brollStyle(layout: BrollLayout): React.CSSProperties {
     case "top-half":       return { ...base, top: 0, left: 0, right: 0, height: 960, borderRadius: "0 0 40px 40px" };
     case "top-two-thirds": return { ...base, top: 0, left: 0, right: 0, height: 1280, borderRadius: "0 0 48px 48px" };
     case "corner":         return { ...base, top: 100, right: 36, width: 288, height: 512, borderRadius: 28 };
+    case "bottom-third":   return { ...base, bottom: 0, left: 0, right: 0, height: 640, borderRadius: "40px 40px 0 0" };
     default:               return { ...base, top: 80, left: 36, right: 36, height: 570, borderRadius: 40 };
   }
 }
@@ -275,19 +277,17 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
   const activeIndex = words.length > 0 ? findActiveWordIndex(words, frame) : -1;
   const zoomScale = getZoomScale(words, frame);
 
+  // Animate only when the visible window shifts (every ~3 words), not on every word.
+  // Per-word animation caused flickering at normal speech pace (~3 words/sec).
+  const winStart = activeIndex >= 0
+    ? Math.max(0, Math.min(activeIndex - 1, words.length - WINDOW_SIZE))
+    : 0;
+  const windowEntryFrame = words[winStart]?.startFrame ?? 0;
   const captionOpacity = activeIndex >= 0
-    ? interpolate(frame, [words[activeIndex].startFrame, words[activeIndex].startFrame + 8], [0, 1], {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
+    ? interpolate(frame, [windowEntryFrame, windowEntryFrame + 6], [0, 1], {
+        extrapolateLeft: "clamp", extrapolateRight: "clamp",
       })
     : 0;
-
-  const captionTranslateY = activeIndex >= 0
-    ? interpolate(frame, [words[activeIndex].startFrame, words[activeIndex].startFrame + 8], [16, 0], {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-      })
-    : 16;
 
   return (
     <div style={{ width: "100%", height: "100%", background: "#000", position: "relative" }}>
@@ -343,7 +343,6 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
               position: "absolute", bottom: 0, left: 0, right: 0,
               background: "rgba(0,0,0,0.65)", padding: "28px 48px",
               opacity: captionOpacity,
-              transform: `translateY(${captionTranslateY}px)`,
               zIndex: 10, pointerEvents: "none",
             }}>
               <div style={{ fontSize: 36, fontFamily: FONT, lineHeight: 1.5, display: "flex", flexWrap: "wrap" }}>
@@ -356,7 +355,7 @@ export const UserVideoCaption: React.FC<UserVideoCaptionProps> = ({
         return (
           <div style={{
             position: "absolute", bottom: "12%", left: "50%",
-            transform: `translateX(-50%) translateY(${captionTranslateY}px)`,
+            transform: "translateX(-50%)",
             width: "88%", display: "flex", flexWrap: "wrap", justifyContent: "center",
             opacity: captionOpacity, zIndex: 10, pointerEvents: "none",
           }}>

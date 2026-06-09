@@ -7,6 +7,16 @@ import AppShell from "@/components/layout/AppShell";
 
 interface BrollCue { index: number; source: "kling" | "pexels" | null; url: string | null; }
 
+const VOICES = [
+  { id: "KXOzch1bNSOicTxNAakl", name: "Kel",    tone: "Custom",      color: "#e879f9" },
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", tone: "Calm",        color: "#a78bfa" },
+  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh",   tone: "Deep",        color: "#60a5fa" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",  tone: "Soft",        color: "#f472b6" },
+  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam",   tone: "Authoritative", color: "#34d399" },
+  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", tone: "Conversational", color: "#fb923c" },
+  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli",   tone: "Energetic",   color: "#facc15" },
+] as const;
+
 const C = {
   bg:         "oklch(14% 0.015 250)",
   surface:    "oklch(18% 0.015 250)",
@@ -37,7 +47,7 @@ const SourceBadge = ({ source }: { source: "kling" | "pexels" | null }) => {
 export default function ClipReview() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
 
   const [captions, setCaptions] = useState<string[]>([]);
   const [clipUrls, setClipUrls] = useState<(string | null)[]>([null, null, null, null, null]);
@@ -46,6 +56,13 @@ export default function ClipReview() {
   const [rendering, setRendering] = useState(false);
   const [status, setStatus] = useState("");
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Voice swap state
+  const [currentVoiceId, setCurrentVoiceId] = useState<string | null>(null);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
+  const [clonedVoice, setClonedVoice] = useState<{ id: string; name: string } | null>(null);
+  const [swappingVoice, setSwappingVoice] = useState(false);
+  const [voiceSwapped, setVoiceSwapped] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -65,6 +82,23 @@ export default function ClipReview() {
         setStatus(data.status ?? "");
       });
   }, [projectId]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("user_profiles")
+      .select("preferred_voice_id, cloned_voice_id, cloned_voice_name")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setCurrentVoiceId(data.preferred_voice_id ?? null);
+        setSelectedVoiceId(data.preferred_voice_id ?? null);
+        if (data.cloned_voice_id) {
+          setClonedVoice({ id: data.cloned_voice_id, name: data.cloned_voice_name ?? "My Clone" });
+        }
+      });
+  }, [user?.id]);
 
   const handleSwap = async (idx: number) => {
     if (!projectId || swapping.has(idx)) return;
@@ -94,6 +128,37 @@ export default function ClipReview() {
       toast.error("Swap failed — please try again");
     } finally {
       setSwapping(prev => { const n = new Set(prev); n.delete(idx); return n; });
+    }
+  };
+
+  const handleSwapVoice = async () => {
+    if (!projectId || swappingVoice || selectedVoiceId === currentVoiceId) return;
+    setSwappingVoice(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/swap-voiceover`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
+          "apikey": anonKey,
+        },
+        body: JSON.stringify({ project_id: projectId, voice_id: selectedVoiceId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.error ?? "Voice swap failed");
+        return;
+      }
+      setCurrentVoiceId(selectedVoiceId);
+      setVoiceSwapped(true);
+      setTimeout(() => setVoiceSwapped(false), 4000);
+      toast.success("Voice updated — hit Render to use it");
+    } catch {
+      toast.error("Could not reach server");
+    } finally {
+      setSwappingVoice(false);
     }
   };
 
@@ -230,6 +295,113 @@ export default function ClipReview() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Voice picker */}
+          <div style={{ borderTop: `1px solid ${C.strokeSoft}`, paddingTop: 24, marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Voice</p>
+              {voiceSwapped && (
+                <span style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>✓ Voice updated</span>
+              )}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {/* Default / null voice */}
+              {(() => {
+                const isSelected = selectedVoiceId === null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVoiceId(null)}
+                    disabled={rendering || swappingVoice}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "6px 12px", borderRadius: 8,
+                      border: `1px solid ${isSelected ? C.accent : C.strokeMed}`,
+                      background: isSelected ? `oklch(72% 0.17 280 / 0.15)` : C.surface,
+                      color: isSelected ? C.accent : C.fgMuted,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#e879f9", flexShrink: 0 }} />
+                    Default
+                  </button>
+                );
+              })()}
+              {/* Preset voices */}
+              {VOICES.map(v => {
+                const isSelected = selectedVoiceId === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setSelectedVoiceId(v.id)}
+                    disabled={rendering || swappingVoice}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "6px 12px", borderRadius: 8,
+                      border: `1px solid ${isSelected ? C.accent : C.strokeMed}`,
+                      background: isSelected ? `oklch(72% 0.17 280 / 0.15)` : C.surface,
+                      color: isSelected ? C.accent : C.fgMuted,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: v.color, flexShrink: 0 }} />
+                    {v.name}
+                  </button>
+                );
+              })}
+              {/* Cloned voice */}
+              {clonedVoice && (() => {
+                const isSelected = selectedVoiceId === clonedVoice.id;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVoiceId(clonedVoice.id)}
+                    disabled={rendering || swappingVoice}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "6px 12px", borderRadius: 8,
+                      border: `1px solid ${isSelected ? C.orange : C.strokeMed}`,
+                      background: isSelected ? "rgba(232,144,84,0.15)" : C.surface,
+                      color: isSelected ? C.orange : C.fgMuted,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.orange, flexShrink: 0 }} />
+                    {clonedVoice.name} ★
+                  </button>
+                );
+              })()}
+            </div>
+            {/* Apply button — only visible when selection differs from current */}
+            {selectedVoiceId !== currentVoiceId && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  onClick={handleSwapVoice}
+                  disabled={swappingVoice || rendering}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8,
+                    background: swappingVoice ? C.surface : C.accent,
+                    border: `1px solid ${swappingVoice ? C.strokeMed : "transparent"}`,
+                    color: swappingVoice ? C.fgMuted : "oklch(14% 0.015 250)",
+                    fontSize: 13, fontWeight: 700,
+                    cursor: swappingVoice ? "not-allowed" : "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 8,
+                    transition: "all 0.15s",
+                  }}>
+                  {swappingVoice ? (
+                    <>
+                      <svg className="animate-spin" width="13" height="13" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      Regenerating audio…
+                    </>
+                  ) : "Apply voice change"}
+                </button>
+                <span style={{ marginLeft: 12, fontSize: 11, color: C.fgDim }}>
+                  ~20 sec · no credits charged
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Render button */}

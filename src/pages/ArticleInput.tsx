@@ -140,7 +140,7 @@ const ArticleInput = () => {
 
   useEffect(() => {
     if (!isLoading) return;
-    setProgress(0); setStage(0); setTimeRemaining(180); setVisibleLines(0);
+    setProgress(0); setStage(0); setTimeRemaining(inputMode === "url" || inputMode === "text" ? 180 : 360); setVisibleLines(0);
     const p = setInterval(() => setProgress((v) => Math.min(v + 0.6, 95)), 1000);
     const s = setInterval(() => setStage((v) => (v + 1) % stages.length), 20000);
     const t = setInterval(() => setTimeRemaining((v) => Math.max(v - 1, 0)), 1000);
@@ -262,7 +262,7 @@ const ArticleInput = () => {
         // Poll for captions_ready
         const pollStart = Date.now();
         pollingRef.current = setInterval(async () => {
-          if (Date.now() - pollStart > 3 * 60 * 1000) {
+          if (Date.now() - pollStart > 6 * 60 * 1000) {
             clearInterval(pollingRef.current!); setIsLoading(false);
             toast.error("Transcription is taking too long. Please try again."); return;
           }

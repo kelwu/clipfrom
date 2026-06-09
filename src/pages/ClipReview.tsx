@@ -52,6 +52,9 @@ export default function ClipReview() {
   const [captions, setCaptions] = useState<string[]>([]);
   const [clipUrls, setClipUrls] = useState<(string | null)[]>([null, null, null, null, null]);
   const [brollCues, setBrollCues] = useState<BrollCue[]>([]);
+  const [captionTimings, setCaptionTimings] = useState<number[] | undefined>(undefined);
+  const [wordTimings, setWordTimings] = useState<number[][] | undefined>(undefined);
+  const [renderParams, setRenderParams] = useState<{ captionStyle?: string; transitionStyle?: string } | null>(null);
   const [swapping, setSwapping] = useState<Set<number>>(new Set());
   const [rendering, setRendering] = useState(false);
   const [status, setStatus] = useState("");
@@ -68,7 +71,7 @@ export default function ClipReview() {
     if (!projectId) return;
     supabase
       .from("ai_generations")
-      .select("caption_options, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, broll_cues, status")
+      .select("caption_options, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, broll_cues, status, safe_caption_timings, word_timings, render_params")
       .eq("project_id", projectId)
       .maybeSingle()
       .then(({ data }) => {
@@ -80,6 +83,9 @@ export default function ClipReview() {
         setClipUrls(urls);
         setBrollCues(Array.isArray(data.broll_cues) ? data.broll_cues : []);
         setStatus(data.status ?? "");
+        if (Array.isArray(data.safe_caption_timings)) setCaptionTimings(data.safe_caption_timings);
+        if (Array.isArray(data.word_timings)) setWordTimings(data.word_timings);
+        if (data.render_params) setRenderParams(data.render_params);
       });
   }, [projectId]);
 
@@ -222,10 +228,41 @@ export default function ClipReview() {
                 {readyCount}/5 clips ready
               </span>
             </div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em" }}>
-              Review your clips
-            </h1>
-            <p style={{ color: C.fgDim, fontSize: 14, margin: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>
+                Review your clips
+              </h1>
+              <button
+                onClick={() => navigate(`/studio/${projectId}`, {
+                  state: {
+                    result: {
+                      video_urls: clipUrls,
+                      caption_timings: captionTimings,
+                      word_timings: wordTimings,
+                    },
+                    captions,
+                    captionStyle: renderParams?.captionStyle ?? "pill",
+                    transitionStyle: renderParams?.transitionStyle ?? "fade",
+                  },
+                })}
+                disabled={clipUrls.filter(Boolean).length < 5}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 16px", borderRadius: 8,
+                  border: `1px solid ${C.strokeMed}`,
+                  background: C.surface, color: C.fgMuted,
+                  fontSize: 13, fontWeight: 600,
+                  cursor: clipUrls.filter(Boolean).length < 5 ? "not-allowed" : "pointer",
+                  opacity: clipUrls.filter(Boolean).length < 5 ? 0.4 : 1,
+                  transition: "all 0.15s",
+                }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="5,3 19,12 5,21"/>
+                </svg>
+                Preview
+              </button>
+            </div>
+            <p style={{ color: C.fgDim, fontSize: 14, margin: "8px 0 0" }}>
               Not happy with a clip? Swap it for a fresh one before rendering. Each swap is instant and free.
             </p>
           </div>

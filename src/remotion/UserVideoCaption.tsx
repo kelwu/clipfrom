@@ -14,6 +14,7 @@ export interface TranscriptWord {
   endFrame: number;
   type: string;
   is_filler?: boolean;
+  is_emphasis?: boolean;
 }
 
 export type BrollLayout =
@@ -65,6 +66,29 @@ function remapWordsToOutput(words: TranscriptWord[], keepSegments: KeepSegment[]
 
 const FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 const WINDOW_SIZE = 3;
+
+// ── Emphasis detection ────────────────────────────────────────────────────────
+// Runs at render time — no pipeline change needed. Flags numbers, ALL-CAPS words,
+// and a curated list of high-impact words for a bigger punch animation.
+const EMPHASIS_WORDS = new Set([
+  "never","always","first","last","only","best","worst","most","least",
+  "billion","million","trillion","zero","hundred","thousand",
+  "impossible","secret","actually","literally","absolutely",
+  "incredible","massive","huge","tiny","perfect","broken","failed",
+  "hate","love","amazing","terrible","biggest","fastest","slowest",
+  "immediately","instantly","suddenly","exactly","guaranteed","free",
+  "new","now","stop","start","change","dead","live","win","lose",
+  "true","false","wrong","right","real","fake","raw","pure",
+]);
+
+function isEmphasis(w: TranscriptWord): boolean {
+  if (w.is_emphasis) return true;
+  const raw = w.word;
+  const clean = raw.replace(/[^a-zA-Z0-9%$]/g, "");
+  if (/\d/.test(raw)) return true; // numbers / dollar amounts / percentages
+  if (clean.length >= 2 && clean === clean.toUpperCase() && /[A-Z]/.test(clean)) return true; // ALL CAPS
+  return EMPHASIS_WORDS.has(clean.toLowerCase());
+}
 
 const ZOOM_SCALE      = 1.15;
 const ZOOM_TRANSITION = 18;
@@ -130,23 +154,30 @@ function renderWords(
   return words.slice(winStart, winEnd + 1).map((w, i) => {
     const idx = winStart + i;
     const isActive = idx === activeIndex;
+    const emph = isActive && isEmphasis(w);
     const frameInWord = frame - w.startFrame;
-    const punch =
-      isActive && frameInWord >= 0 && frameInWord < 8
-        ? interpolate(frameInWord, [0, 4, 8], [1.14, 1.07, 1.0], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
+
+    // Emphasis: bigger punch (1.4×) sustained for ~18 frames; regular: subtle 1.14× over 8 frames.
+    const punch = isActive && frameInWord >= 0
+      ? emph
+        ? interpolate(frameInWord, [0, 3, 10, 18], [1.4, 1.38, 1.2, 1.0], {
+            extrapolateLeft: "clamp", extrapolateRight: "clamp",
           })
-        : 1.0;
+        : interpolate(frameInWord, [0, 4, 8], [1.14, 1.07, 1.0], {
+            extrapolateLeft: "clamp", extrapolateRight: "clamp",
+          })
+      : 1.0;
 
     if (captionStyle === "bold") {
       return (
         <span key={idx} style={{
           display: "inline-block",
-          color: isActive ? "#F5C518" : "#ffffff",
+          color: emph ? "#FFFFFF" : isActive ? "#F5C518" : "#ffffff",
           fontWeight: isActive ? 900 : 700,
           fontFamily: FONT,
-          textShadow: "0 2px 14px rgba(0,0,0,1), 0 0 32px rgba(0,0,0,0.95)",
+          textShadow: emph
+            ? "0 0 20px #F5C518, 0 0 40px rgba(245,197,24,0.6), 0 2px 14px rgba(0,0,0,1)"
+            : "0 2px 14px rgba(0,0,0,1), 0 0 32px rgba(0,0,0,0.95)",
           margin: "0 5px",
           transform: isActive ? `scale(${punch})` : "none",
           transformOrigin: "center",
@@ -159,27 +190,33 @@ function renderWords(
     if (captionStyle === "lower-third") {
       return (
         <span key={idx} style={{
+          display: "inline-block",
           marginRight: 8,
-          color: isActive ? "#E89054" : "#ffffff",
-          fontWeight: isActive ? 800 : 600,
+          color: emph ? "#FFFFFF" : isActive ? "#E89054" : "#ffffff",
+          fontWeight: emph ? 900 : isActive ? 800 : 600,
           fontFamily: FONT,
+          textShadow: emph ? "0 0 16px #E89054, 0 0 32px rgba(232,144,84,0.5)" : "none",
+          transform: emph ? `scale(${punch})` : "none",
+          transformOrigin: "center",
         }}>
           {w.word}
         </span>
       );
     }
 
+    // Default: pill — emphasis inverts to white bg + orange text + orange glow ring
     return (
       <span key={idx} style={{
         display: "inline-block",
-        background: isActive ? "#E89054" : "transparent",
-        color: "#ffffff",
+        background: emph ? "#FFFFFF" : isActive ? "#E89054" : "transparent",
+        color: emph ? "#E89054" : "#ffffff",
         borderRadius: isActive ? 8 : 0,
         padding: isActive ? "5px 16px" : "5px 8px",
         margin: "3px",
-        fontWeight: isActive ? 800 : 600,
+        fontWeight: emph ? 900 : isActive ? 800 : 600,
         fontFamily: FONT,
         textShadow: isActive ? "none" : "0 1px 10px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.9)",
+        boxShadow: emph ? "0 0 0 3px #E89054, 0 0 20px rgba(232,144,84,0.5)" : "none",
         transform: isActive ? `scale(${punch})` : "none",
         transformOrigin: "center",
       }}>

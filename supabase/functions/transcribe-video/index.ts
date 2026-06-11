@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
     // Pass the public URL directly — ElevenLabs fetches the video themselves,
     // avoiding a full download+re-upload through the edge function.
     const formData = new FormData();
-    formData.append("url", video_url);
+    formData.append("source_url", video_url);
     formData.append("model_id", "scribe_v1");
     formData.append("timestamps_granularity", "word");
     formData.append("tag_audio_events", "false");

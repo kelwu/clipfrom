@@ -9,8 +9,8 @@ import { StudioComposition, type CaptionStyle } from "@/components/studio/Studio
 const CLIP_DURATION = 150;
 const HOOK_DURATION = 45;
 
-function totalFrames(transitionDuration: number) {
-  return HOOK_DURATION + CLIP_DURATION * 5 + transitionDuration * 4;
+function totalFrames(clipCount: number, transitionDuration: number) {
+  return HOOK_DURATION + CLIP_DURATION * clipCount + transitionDuration * Math.max(0, clipCount - 1);
 }
 
 const STYLE_OPTIONS: { value: CaptionStyle; label: string; desc: string }[] = [
@@ -41,24 +41,24 @@ export default function Studio() {
   const wordTimings: number[][] | undefined = stateResult.word_timings ?? undefined;
   const stitchedVideoUrl: string = stateResult.stitched_video_url ?? "";
 
-  const clips: [string, string, string, string, string] = [
-    stateResult.video_url_1 ?? "",
-    stateResult.video_url_2 ?? "",
-    stateResult.video_url_3 ?? "",
-    stateResult.video_url_4 ?? "",
-    stateResult.video_url_5 ?? "",
-  ];
+  const clips: string[] = Array.isArray(stateResult.video_urls) && stateResult.video_urls.length > 0
+    ? stateResult.video_urls.map((u: string | null) => u ?? "")
+    : [
+        stateResult.video_url_1 ?? "",
+        stateResult.video_url_2 ?? "",
+        stateResult.video_url_3 ?? "",
+        stateResult.video_url_4 ?? "",
+        stateResult.video_url_5 ?? "",
+      ].filter((_, i) => i < (initialCaptions.length || 5));
 
-  const [captions, setCaptions] = useState<string[]>(
-    initialCaptions.length >= 5 ? initialCaptions.slice(0, 5) : [...initialCaptions, ...Array(5 - initialCaptions.length).fill("")]
-  );
+  const [captions, setCaptions] = useState<string[]>(initialCaptions.length > 0 ? initialCaptions : [""]);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initialStyle);
   const [transitionStyle, setTransitionStyle] = useState(initialTransition);
   const [expandedCaption, setExpandedCaption] = useState<number | null>(null);
   const [rerendering, setRerendering] = useState(false);
 
   const transitionDuration = transitionStyle === "cut" ? 5 : 35;
-  const duration = totalFrames(transitionDuration);
+  const duration = totalFrames(clips.length || 5, transitionDuration);
 
   const handleRerender = async () => {
     setRerendering(true);
@@ -212,7 +212,7 @@ export default function Studio() {
               component={StudioComposition}
               inputProps={{
                 clips,
-                captions: captions as [string,string,string,string,string],
+                captions,
                 captionStyle,
                 transitionStyle,
                 captionTimings,

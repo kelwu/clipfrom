@@ -15,9 +15,9 @@ import { wipe } from "@remotion/transitions/wipe";
 export type CaptionStyle = "pill" | "bold" | "lower-third" | "none";
 
 export interface StudioCompositionProps {
-  clips: [string, string, string, string, string];
+  clips: string[];
   audioUrl?: string;
-  captions: [string, string, string, string, string];
+  captions: string[];
   captionStyle?: CaptionStyle;
   transitionStyle?: string;
   captionTimings?: number[];
@@ -192,7 +192,7 @@ const renderBoldWords = (
 const ClipSegment: React.FC<{ videoUrl: string; clipIndex: number }> = ({ videoUrl, clipIndex }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  const { startScale, endScale, originX, originY } = KEN_BURNS_CONFIG[clipIndex];
+  const { startScale, endScale, originX, originY } = KEN_BURNS_CONFIG[clipIndex % KEN_BURNS_CONFIG.length];
   const scale = interpolate(frame, [0, durationInFrames], [startScale, endScale], {
     extrapolateLeft: "clamp", extrapolateRight: "clamp",
   });

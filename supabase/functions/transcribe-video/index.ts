@@ -111,13 +111,10 @@ Deno.serve(async (req) => {
 
     if (upsertError) throw new Error(`DB upsert failed: ${upsertError.message}`);
 
-    // Download video from Supabase Storage, then POST binary to ElevenLabs Scribe
-    const videoRes = await fetch(video_url);
-    if (!videoRes.ok) throw new Error(`Failed to fetch video: ${videoRes.status}`);
-    const videoBlob = await videoRes.blob();
-
+    // Pass the public URL directly — ElevenLabs fetches the video themselves,
+    // avoiding a full download+re-upload through the edge function.
     const formData = new FormData();
-    formData.append("file", videoBlob, "video.mp4");
+    formData.append("url", video_url);
     formData.append("model_id", "scribe_v1");
     formData.append("timestamps_granularity", "word");
     formData.append("tag_audio_events", "false");

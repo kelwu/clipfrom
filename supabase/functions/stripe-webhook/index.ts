@@ -31,21 +31,18 @@ Deno.serve(async (req) => {
     return new Response("Invalid signature", { status: 400 });
   }
 
-  // Idempotency guard — insert event_id; if it already exists, this is a retry we've handled.
-  const { error: dupErr } = await supabase
+  // Idempotency guard — check if we've already processed this event ID
+  const { data: existing } = await supabase
     .from("processed_stripe_events")
-    .insert({ event_id: event.id });
+    .select("event_id")
+    .eq("event_id", event.id)
+    .maybeSingle();
 
-  if (dupErr) {
-    // Postgres unique-violation code = 23505
-    if (dupErr.code === "23505") {
-      console.log(`Event ${event.id} already processed — skipping`);
-      return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    console.error("Could not record event:", dupErr);
-    return new Response("DB error", { status: 500 });
+  if (existing) {
+    console.log(`Event ${event.id} already processed — skipping`);
+    return new Response(JSON.stringify({ received: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -102,8 +99,17 @@ Deno.serve(async (req) => {
     }
   } catch (err) {
     console.error("Webhook handler error:", err);
-    // Return 500 so Stripe retries — but our idempotency guard will skip it if already processed
+    // Do NOT record the event — let Stripe retry and we'll process it next time
     return new Response("Handler error", { status: 500 });
+  }
+
+  // Mark as processed only after successful handling so a retry can re-run on transient failure
+  const { error: insertErr } = await supabase
+    .from("processed_stripe_events")
+    .insert({ event_id: event.id });
+  if (insertErr && insertErr.code !== "23505") {
+    console.error("Could not record processed event:", insertErr);
+    // Non-fatal: credits were granted, idempotency record is best-effort
   }
 
   return new Response(JSON.stringify({ received: true }), {

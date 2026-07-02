@@ -59,6 +59,19 @@ Deno.serve(async (req) => {
       creditDecremented = true;
     }
 
+    // Verify caller owns this project (prevent cross-tenant IDOR)
+    const { data: project } = await supabaseAdmin
+      .from("projects")
+      .select("user_id")
+      .eq("id", project_id)
+      .maybeSingle();
+    if (!project || project.user_id !== userId) {
+      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
+      return new Response(JSON.stringify({ error: "Not your project" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch captions + article images
     const { data: gen, error } = await supabaseAdmin
       .from("ai_generations")

@@ -1,9 +1,29 @@
+import { Component, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0a0a12", color: "#e5e5f0", fontFamily: "system-ui", gap: 16, padding: 24 }}>
+          <p style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Something went wrong</p>
+          <p style={{ fontSize: 14, color: "#888", margin: 0 }}>Please reload the page.</p>
+          <button onClick={() => window.location.reload()} style={{ padding: "10px 24px", borderRadius: 8, background: "#7c3aed", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import ProtectedRoute from "./components/ProtectedRoute";
 import ArticleInput from "./pages/ArticleInput";
 import CaptionEditor from "./pages/CaptionEditor";
@@ -26,6 +46,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const App = () => (
+  <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -56,6 +77,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

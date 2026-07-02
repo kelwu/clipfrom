@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { video_url, caption, user_id } = await req.json();
+    const { video_url, caption } = await req.json();
 
     if (!video_url) {
       return new Response(
@@ -20,32 +20,47 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Verify caller JWT — derive user identity from token, never from the request body
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const adminSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const { data: { user }, error: authError } = await adminSupabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let accessToken: string;
     let accountId: string;
 
-    // Use per-user token if user_id provided, otherwise fall back to env vars
-    if (user_id) {
-      const adminSupabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
-      const { data: profile } = await adminSupabase
-        .from("user_profiles")
-        .select("instagram_access_token, instagram_account_id")
-        .eq("id", user_id)
-        .single();
+    // Load credentials for the authenticated user only
+    const { data: profile } = await adminSupabase
+      .from("user_profiles")
+      .select("instagram_access_token, instagram_account_id")
+      .eq("id", user.id)
+      .single();
 
-      if (!profile?.instagram_access_token || !profile?.instagram_account_id) {
+    if (profile?.instagram_access_token && profile?.instagram_account_id) {
+      accessToken = profile.instagram_access_token;
+      accountId = profile.instagram_account_id;
+    } else {
+      // Fall back to shared env-var account (admin posting scenario)
+      accessToken = Deno.env.get("INSTAGRAM_ACCESS_TOKEN")!;
+      accountId = Deno.env.get("INSTAGRAM_ACCOUNT_ID")!;
+      if (!accessToken || !accountId) {
         return new Response(
           JSON.stringify({ error: "Instagram account not connected. Please connect your Instagram account first." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      accessToken = profile.instagram_access_token;
-      accountId = profile.instagram_account_id;
-    } else {
-      accessToken = Deno.env.get("INSTAGRAM_ACCESS_TOKEN")!;
-      accountId = Deno.env.get("INSTAGRAM_ACCOUNT_ID")!;
     }
 
     // Step 1 — Create media container

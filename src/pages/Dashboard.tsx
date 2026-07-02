@@ -217,10 +217,9 @@ export default function Dashboard() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        setProjects((data as unknown as Project[]) ?? []);
-        setLoading(false);
-      });
+      .then(({ data }) => { setProjects((data as unknown as Project[]) ?? []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [user?.id]);
 
   const handleRetry = async (projectId: string) => {

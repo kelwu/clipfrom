@@ -4,8 +4,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, x-pipeline-secret",
 };
+
+const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
 
 const FPS = 30;
 
@@ -16,6 +18,19 @@ function stripEmojis(text: string): string {
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Internal-only endpoint — require PIPELINE_SECRET so external callers can't burn ElevenLabs quota
+  if (!PIPELINE_SECRET) {
+    return new Response(JSON.stringify({ error: "Service unavailable" }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const callerSecret = req.headers.get("x-pipeline-secret") ?? "";
+  if (callerSecret !== PIPELINE_SECRET) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {

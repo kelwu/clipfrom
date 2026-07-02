@@ -50,7 +50,7 @@ export default function ClipReview() {
   const { session, user } = useAuth();
 
   const [captions, setCaptions] = useState<string[]>([]);
-  const [clipUrls, setClipUrls] = useState<(string | null)[]>([null, null, null, null, null]);
+  const [clipUrls, setClipUrls] = useState<(string | null)[]>([]);
   const [brollCues, setBrollCues] = useState<BrollCue[]>([]);
   const [captionTimings, setCaptionTimings] = useState<number[] | undefined>(undefined);
   const [wordTimings, setWordTimings] = useState<number[][] | undefined>(undefined);
@@ -76,11 +76,12 @@ export default function ClipReview() {
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
-        setCaptions(Array.isArray(data.caption_options) ? data.caption_options : []);
+        const loadedCaptions = Array.isArray(data.caption_options) ? data.caption_options : [];
+        setCaptions(loadedCaptions);
         const urls = Array.isArray(data.video_urls) && data.video_urls.some(Boolean)
           ? data.video_urls
-          : [data.video_url_1, data.video_url_2, data.video_url_3, data.video_url_4, data.video_url_5];
-        setClipUrls(urls);
+          : [data.video_url_1, data.video_url_2, data.video_url_3, data.video_url_4, data.video_url_5].filter((_, i) => i < loadedCaptions.length);
+        setClipUrls(urls.length ? urls : Array(loadedCaptions.length).fill(null));
         setBrollCues(Array.isArray(data.broll_cues) ? data.broll_cues : []);
         setStatus(data.status ?? "");
         if (Array.isArray(data.safe_caption_timings)) setCaptionTimings(data.safe_caption_timings);
@@ -189,8 +190,10 @@ export default function ClipReview() {
         setRendering(false);
         return;
       }
-      // Poll for completion then navigate to results
+      // Poll for completion then navigate to results (cap at ~12 min = 90 × 8s)
+      let pollAttempts = 0;
       pollingRef.current = setInterval(async () => {
+        pollAttempts++;
         const { data } = await supabase
           .from("ai_generations")
           .select("status, stitched_video_url")
@@ -203,6 +206,10 @@ export default function ClipReview() {
           clearInterval(pollingRef.current!);
           toast.error("Render failed — please try again");
           setRendering(false);
+        } else if (pollAttempts >= 90) {
+          clearInterval(pollingRef.current!);
+          toast.error("Render is taking longer than expected. Check your email or try again.");
+          setRendering(false);
         }
       }, 8000);
     } catch {
@@ -214,6 +221,8 @@ export default function ClipReview() {
   useEffect(() => () => { if (pollingRef.current) clearInterval(pollingRef.current); }, []);
 
   const readyCount = clipUrls.filter(Boolean).length;
+  const clipCount = captions.length || clipUrls.length || 5;
+  const allReady = clipCount > 0 && readyCount >= clipCount;
 
   return (
     <AppShell>
@@ -225,7 +234,7 @@ export default function ClipReview() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 8, height: 8, background: C.green, borderRadius: "50%", boxShadow: `0 0 8px ${C.green}` }} />
               <span style={{ color: C.green, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                {readyCount}/5 clips ready
+                {readyCount}/{clipCount} clips ready
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -245,15 +254,15 @@ export default function ClipReview() {
                     transitionStyle: renderParams?.transitionStyle ?? "fade",
                   },
                 })}
-                disabled={clipUrls.filter(Boolean).length < 5}
+                disabled={!allReady}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "8px 16px", borderRadius: 8,
                   border: `1px solid ${C.strokeMed}`,
                   background: C.surface, color: C.fgMuted,
                   fontSize: 13, fontWeight: 600,
-                  cursor: clipUrls.filter(Boolean).length < 5 ? "not-allowed" : "pointer",
-                  opacity: clipUrls.filter(Boolean).length < 5 ? 0.4 : 1,
+                  cursor: !allReady ? "not-allowed" : "pointer",
+                  opacity: !allReady ? 0.4 : 1,
                   transition: "all 0.15s",
                 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -269,7 +278,7 @@ export default function ClipReview() {
 
           {/* Clip grid */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16, marginBottom: 32 }}>
-            {[0, 1, 2, 3, 4].map(i => {
+            {Array.from({ length: clipCount }, (_, i) => i).map(i => {
               const url = clipUrls[i];
               const cue = brollCues.find(c => c.index === i);
               const isSwapping = swapping.has(i);
@@ -460,18 +469,18 @@ export default function ClipReview() {
             ) : (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
                 <p style={{ margin: 0, color: C.fgDim, fontSize: 13 }}>
-                  Happy with all {readyCount} clips? Render to get your final 9:16 MP4.
+                  Happy with all {clipCount} clips? Render to get your final 9:16 MP4.
                 </p>
                 <button
                   onClick={handleRender}
-                  disabled={readyCount < 5}
+                  disabled={!allReady}
                   style={{
                     padding: "12px 28px", borderRadius: 10,
-                    background: readyCount < 5 ? C.strokeMed : C.accent,
+                    background: !allReady ? C.strokeMed : C.accent,
                     border: "none",
-                    color: readyCount < 5 ? C.fgDim : "oklch(14% 0.015 250)",
+                    color: !allReady ? C.fgDim : "oklch(14% 0.015 250)",
                     fontSize: 15, fontWeight: 700,
-                    cursor: readyCount < 5 ? "not-allowed" : "pointer",
+                    cursor: !allReady ? "not-allowed" : "pointer",
                     letterSpacing: "-0.01em", transition: "all 0.15s",
                   }}
                 >

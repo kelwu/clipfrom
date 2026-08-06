@@ -57,6 +57,9 @@ export default function Settings() {
   const [cloningVoice, setCloningVoice] = useState(false);
   const [deletingClone, setDeletingClone] = useState(false);
   const cloneInputRef = useRef<HTMLInputElement>(null);
+  const [voicePreviews, setVoicePreviews] = useState<Record<string, string>>({});
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleCloneVoice = async (file: File) => {
     if (!user || !session) return;
@@ -129,6 +132,37 @@ export default function Settings() {
         setOutro(data?.caption_outro ?? "");
       });
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!session) return;
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/voice-previews`, {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+    })
+      .then(r => r.ok ? r.json() : {})
+      .then(setVoicePreviews)
+      .catch(() => {});
+  }, [session?.access_token]);
+
+  function handlePlayPreview(voiceId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (playingVoiceId === voiceId) {
+      previewAudioRef.current?.pause();
+      previewAudioRef.current = null;
+      setPlayingVoiceId(null);
+      return;
+    }
+    previewAudioRef.current?.pause();
+    const url = voicePreviews[voiceId];
+    if (!url) return;
+    const audio = new Audio(url);
+    audio.onended = () => setPlayingVoiceId(null);
+    audio.play().catch(() => {});
+    previewAudioRef.current = audio;
+    setPlayingVoiceId(voiceId);
+  }
 
   const handleSaveOutro = async () => {
     if (!user) return;
@@ -475,6 +509,8 @@ export default function Settings() {
                 })()}
                 {VOICES.map(voice => {
                   const isSelected = profile.preferred_voice_id === voice.id;
+                  const isPlaying = playingVoiceId === voice.id;
+                  const hasPreview = !!voicePreviews[voice.id];
                   return (
                     <button
                       key={voice.id}
@@ -496,9 +532,27 @@ export default function Settings() {
                         <p className="text-xs font-semibold text-white leading-tight">{voice.name}</p>
                         <p className="text-[10px] text-gray-500 leading-tight truncate">{voice.tone}</p>
                       </div>
-                      {isSelected && (
-                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                      )}
+                      <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                        {hasPreview && (
+                          <span
+                            role="button"
+                            onClick={e => handlePlayPreview(voice.id, e)}
+                            title={isPlaying ? "Stop preview" : "Preview voice"}
+                            className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white transition-colors"
+                          >
+                            {isPlaying ? (
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                              </svg>
+                            ) : (
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5,3 19,12 5,21"/>
+                              </svg>
+                            )}
+                          </span>
+                        )}
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />}
+                      </div>
                     </button>
                   );
                 })}

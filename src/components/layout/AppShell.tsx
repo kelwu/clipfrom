@@ -276,6 +276,28 @@ export default function AppShell({ children, activePage }: AppShellProps) {
             </>
           )}
 
+          {/* Admin */}
+          {isAdmin && (
+            <button
+              className={activePage !== "Admin" ? "shell-bottom-item" : ""}
+              onClick={() => navigate("/admin")}
+              style={{
+                display: "flex", alignItems: "center", gap: 11, padding: "9px 10px",
+                borderRadius: 9, width: "100%", textAlign: "left", border: "none",
+                background: activePage === "Admin" ? C.accentSubtle : "none",
+                cursor: "pointer", fontFamily: sans, transition: "background 0.12s",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+                style={{ color: activePage === "Admin" ? C.accent : C.fgMuted, flexShrink: 0 }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span style={{ fontSize: 15, color: activePage === "Admin" ? C.accent : C.fgMuted, fontWeight: activePage === "Admin" ? 500 : 400 }}>
+                Admin
+              </span>
+            </button>
+          )}
+
           {/* Settings */}
           <button
             className={activePage !== "Settings" ? "shell-bottom-item" : ""}

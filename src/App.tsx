@@ -41,6 +41,7 @@ import UpdatePassword from "./pages/UpdatePassword";
 import InstagramCallback from "./pages/InstagramCallback";
 import ClipReview from "./pages/ClipReview";
 import HighlightPicker from "./pages/HighlightPicker";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -70,6 +71,7 @@ const App = () => (
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/upgrade/success" element={<ProtectedRoute><UpgradeSuccess /></ProtectedRoute>} />
             <Route path="/update-password" element={<UpdatePassword />} />
+            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

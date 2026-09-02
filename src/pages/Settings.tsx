@@ -20,12 +20,8 @@ interface Profile {
 
 const VOICES = [
   { id: "KXOzch1bNSOicTxNAakl", name: "Kel",    gender: "Male",   tone: "Custom voice", color: "#e879f9" },
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "Female", tone: "Calm & clear", color: "#a78bfa" },
-  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh",   gender: "Male",   tone: "Deep & warm",  color: "#60a5fa" },
   { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",  gender: "Female", tone: "Soft & expressive", color: "#f472b6" },
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam",   gender: "Male",   tone: "Authoritative", color: "#34d399" },
-  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", gender: "Male",   tone: "Conversational", color: "#fb923c" },
-  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli",   gender: "Female", tone: "Energetic & young", color: "#facc15" },
 ] as const;
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {

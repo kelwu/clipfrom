@@ -10,12 +10,8 @@ interface BrollCue { index: number; source: "kling" | "pexels" | null; url: stri
 // Color removed from VOICES — identity is name + tone, not a dot (P2 fix)
 const VOICES = [
   { id: "KXOzch1bNSOicTxNAakl", name: "Kel",    tone: "Custom"          },
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", tone: "Calm"            },
-  { id: "TxGEqnHWrfWFTfGW9XjX", name: "Josh",   tone: "Deep"            },
   { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",  tone: "Soft"            },
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam",   tone: "Authoritative"   },
-  { id: "ErXwobaYiN019PkySvjV", name: "Antoni", tone: "Conversational"  },
-  { id: "MF3mGyEYCl7XYWbV9V6O", name: "Elli",   tone: "Energetic"       },
 ] as const;
 
 const C = {

@@ -2,12 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const TARGET_IDS = new Set([
   "KXOzch1bNSOicTxNAakl",
-  "21m00Tcm4TlvDq8ikWAM",
-  "TxGEqnHWrfWFTfGW9XjX",
   "EXAVITQu4vr4xnSDxMaL",
   "pNInz6obpgDQGcFmaJgB",
-  "ErXwobaYiN019PkySvjV",
-  "MF3mGyEYCl7XYWbV9V6O",
 ]);
 
 const corsHeaders = {

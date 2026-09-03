@@ -48,6 +48,8 @@ export default function VideoResults() {
   const [videoSegments, setVideoSegments] = useState<{ id: string; segment_index: number; title: string; status: string; output_url: string | null }[]>([]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const triggeredRef = useRef(false);
+  // Non-null once the render fails ("failed") or the client-side poll gives up ("timeout").
+  const [renderProblem, setRenderProblem] = useState<null | "failed" | "timeout">(null);
 
   const { session, user } = useAuth();
 
@@ -235,6 +237,15 @@ export default function VideoResults() {
           .eq("project_id", projectId).maybeSingle();
         if (!data) return false;
         setResult(data);
+        // Terminal failure — stop polling and surface it instead of spinning forever.
+        // Covers 'failed', 'kling_all_failed', and any *_error status (remotion_error, voiceover_error, …).
+        const st: string = data.status ?? "";
+        if (st === "failed" || st === "kling_all_failed" || st.endsWith("_error")) {
+          clearInterval(pollingRef.current!);
+          setRenderProblem("failed");
+          toast.error("This render didn't complete. You can try again from your library.");
+          return true;
+        }
         // Article mode: when clips are ready, navigate to review page before rendering
         if (sourceMode !== "video" && data.status === "videos_ready" && !data.stitched_video_url) {
           clearInterval(pollingRef.current!);
@@ -253,9 +264,20 @@ export default function VideoResults() {
     };
 
     triggerVideoGeneration();
+    let attempts = 0;
     poll(true).then((alreadyComplete) => {
       if (!alreadyComplete) {
-        pollingRef.current = setInterval(() => poll(false), 10000);
+        pollingRef.current = setInterval(() => {
+          attempts++;
+          // ~13 min cap (78 × 10s). The render keeps running server-side and the user is emailed
+          // on completion — this only stops the client-side spinner from hanging forever.
+          if (attempts >= 78) {
+            clearInterval(pollingRef.current!);
+            setRenderProblem("timeout");
+            return;
+          }
+          poll(false);
+        }, 10000);
       }
     });
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
@@ -451,6 +473,35 @@ export default function VideoResults() {
                 Each short takes ~3 minutes. We'll email you when they're done.
               </p>
             )}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ── Render failed / timed out ───────────────────────────────────────────────
+  if (renderProblem && !stitchedReady) {
+    return (
+      <AppShell>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center space-y-4">
+            <div className="text-4xl">{renderProblem === "timeout" ? "⏳" : "⚠️"}</div>
+            <h1 className="text-xl font-bold text-white">
+              {renderProblem === "timeout" ? "This is taking longer than expected" : "Render didn't complete"}
+            </h1>
+            <p className="text-gray-400 text-sm">
+              {renderProblem === "timeout"
+                ? "Your video is still rendering on our servers. We'll email you when it's ready — you can safely leave this page."
+                : "Something went wrong while rendering this video. You can try again from your library."}
+            </p>
+            <div className="flex gap-3 justify-center pt-2">
+              <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors">
+                Go to Library
+              </button>
+              <button onClick={() => navigate("/")} className="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-500 text-gray-300 text-sm font-semibold transition-colors">
+                Start over
+              </button>
+            </div>
           </div>
         </div>
       </AppShell>

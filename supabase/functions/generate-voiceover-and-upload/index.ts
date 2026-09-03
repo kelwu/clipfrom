@@ -9,6 +9,11 @@ const corsHeaders = {
 
 const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
 
+// TTS model — env-overridable so we can roll forward/back without a code deploy.
+// multilingual_v2 replaces the legacy eleven_monolingual_v1 (English-only, older quality)
+// while keeping the same /with-timestamps alignment contract the caption sync depends on.
+const TTS_MODEL = Deno.env.get("ELEVENLABS_TTS_MODEL") ?? "eleven_multilingual_v2";
+
 const FPS = 30;
 
 function stripEmojis(text: string): string {
@@ -52,7 +57,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           text: cleanScript,
-          model_id: "eleven_monolingual_v1",
+          model_id: TTS_MODEL,
           voice_settings: { stability: 0.5, similarity_boost: 0.75 },
         }),
       }

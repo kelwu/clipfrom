@@ -100,6 +100,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Idempotency: if this project was already transcribed, don't re-run (Scribe costs money).
+    // Lets the client-side recovery path safely re-fire without double-transcribing.
+    const { data: existingGen } = await supabase
+      .from("ai_generations").select("status").eq("project_id", project_id).maybeSingle();
+    if (existingGen?.status === "captions_ready") {
+      return new Response(JSON.stringify({ success: true, already_transcribed: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Mark as transcribing (onConflict handles projects that already have an article-mode row)
     const { error: upsertError } = await supabase.from("ai_generations").upsert({
       project_id,

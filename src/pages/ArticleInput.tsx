@@ -173,6 +173,111 @@ const ArticleInput = () => {
 
   const testMode = import.meta.env.VITE_TEST_MODE === "true";
 
+  // ── Resilient upload → transcription hand-off ──────────────────────────────
+  // The browser uploads the file, then triggers transcription. If the tab is
+  // suspended/discarded in between (common when a user switches away), that trigger
+  // can be lost and the upload is silently stranded. We persist a recovery record so
+  // the flow can re-fire / resume when the user returns (see the recovery effect below).
+  const PENDING_UPLOAD_KEY = "clipfrom_pending_upload";
+
+  const clearPendingUpload = () => {
+    try { localStorage.removeItem(PENDING_UPLOAD_KEY); } catch { /* ignore */ }
+  };
+  const savePendingUpload = (p: {
+    projectId: string; publicUrl: string; videoDurationFrames: number;
+    mode: string; email: string; filePath: string;
+  }) => {
+    try { localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify({ ...p, ts: Date.now() })); } catch { /* ignore */ }
+  };
+
+  // transcribe-video runs the transcription to completion server-side and only then returns,
+  // so a dropped response does NOT abort it — we fire it without blocking navigation and let
+  // polling be the source of truth. Idempotent server-side, so re-firing on recovery is safe.
+  const fireTranscription = (projectId: string, publicUrl: string, videoDurationFrames: number) =>
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-video`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ project_id: projectId, video_url: publicUrl, video_duration_frames: videoDurationFrames }),
+    });
+
+  // Poll a video-mode generation until captions are ready (or it errors / times out), then navigate.
+  // Shared by the initial upload flow and the tab-suspension recovery path.
+  const startVideoPolling = (projectId: string, mode: string, email: string) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    setIsLoading(true);
+    const pollStart = Date.now();
+    pollingRef.current = setInterval(async () => {
+      if (Date.now() - pollStart > 6 * 60 * 1000) {
+        clearInterval(pollingRef.current!); setIsLoading(false); clearPendingUpload();
+        toast.error("Transcription is taking too long. Please try again."); return;
+      }
+      try {
+        const { data } = await supabase
+          .from("ai_generations")
+          .select("status, transcript_words")
+          .eq("project_id", projectId).maybeSingle();
+        if (data?.status === "captions_ready") {
+          clearInterval(pollingRef.current!); clearPendingUpload();
+          const wordCount = Array.isArray(data.transcript_words)
+            ? (data.transcript_words as { type: string }[]).filter(w => w.type === "word").length : 0;
+          navigate(mode === "long_video" ? `/highlight-picker/${projectId}` : `/video-style/${projectId}`,
+            { state: { userEmail: email, wordCount } });
+        } else if (data?.status === "transcription_error") {
+          clearInterval(pollingRef.current!); setIsLoading(false); clearPendingUpload();
+          toast.error("We couldn't transcribe that video. Please try again.");
+        }
+      } catch { /* keep polling */ }
+    }, 3000);
+  };
+
+  // Recover a stranded upload after a tab suspension/reload: navigate if transcription finished
+  // while we were away, resume polling if it's in-flight, or re-fire it if the trigger was lost.
+  useEffect(() => {
+    if (!user) return;
+    const recover = async () => {
+      if (pollingRef.current) return; // already handling
+      let raw: string | null = null;
+      try { raw = localStorage.getItem(PENDING_UPLOAD_KEY); } catch { return; }
+      if (!raw) return;
+      let p: {
+        projectId?: string; publicUrl?: string; videoDurationFrames?: number;
+        mode?: string; email?: string; filePath?: string; ts?: number;
+      };
+      try { p = JSON.parse(raw); } catch { clearPendingUpload(); return; }
+      if (!p.projectId || !p.publicUrl) { clearPendingUpload(); return; }
+      // Abandon (and clean up the orphaned file for) uploads older than 2h.
+      if (Date.now() - (p.ts ?? 0) > 2 * 60 * 60 * 1000) {
+        clearPendingUpload();
+        if (p.filePath) supabase.storage.from("user-videos").remove([p.filePath]).catch(() => {});
+        return;
+      }
+      const mode = p.mode ?? "video";
+      const email = p.email ?? user.email ?? "";
+      const { data } = await supabase
+        .from("ai_generations").select("status").eq("project_id", p.projectId).maybeSingle();
+      if (data?.status === "transcription_error") {
+        clearPendingUpload();
+        toast.error("Your last upload failed to transcribe. Please try again.");
+        return;
+      }
+      if (!data) {
+        // Stranded — the transcription trigger never reached the server. Fire it now.
+        fireTranscription(p.projectId, p.publicUrl, p.videoDurationFrames ?? 0).catch(() => {});
+      }
+      // captions_ready → poll navigates immediately; transcribing → poll resumes; stranded → poll waits for the re-fire.
+      startVideoPolling(p.projectId, mode, email);
+    };
+    recover();
+    const onVisible = () => { if (document.visibilityState === "visible") recover(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (user && !isAdmin && credits !== null && credits < 1) {
@@ -247,43 +352,12 @@ const ArticleInput = () => {
         });
 
         const resolvedEmail = user.email ?? "";
-        const transcribeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-video`;
-        const res = await fetch(transcribeUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ project_id: projectId, video_url: publicUrl, video_duration_frames: videoDurationFrames }),
-        });
-        if (!res.ok) throw new Error("Transcription request failed");
-
-        // Poll for captions_ready
-        const pollStart = Date.now();
-        pollingRef.current = setInterval(async () => {
-          if (Date.now() - pollStart > 6 * 60 * 1000) {
-            clearInterval(pollingRef.current!); setIsLoading(false);
-            toast.error("Transcription is taking too long. Please try again."); return;
-          }
-          try {
-            const { data } = await supabase
-              .from("ai_generations")
-              .select("status, transcript_words")
-              .eq("project_id", projectId!).maybeSingle();
-            if (data?.status === "captions_ready") {
-              clearInterval(pollingRef.current!);
-              const wordCount = Array.isArray(data.transcript_words)
-                ? (data.transcript_words as { type: string }[]).filter(w => w.type === "word").length
-                : 0;
-              if (inputMode === "long_video") {
-                navigate(`/highlight-picker/${projectId}`, { state: { userEmail: resolvedEmail, wordCount } });
-              } else {
-                navigate(`/video-style/${projectId}`, { state: { userEmail: resolvedEmail, wordCount } });
-              }
-            }
-          } catch { /* continue polling */ }
-        }, 3000);
+        // Persist recovery state, then fire transcription WITHOUT blocking. If the tab is
+        // suspended during transcription the server still finishes, and polling / the recovery
+        // effect picks it up when the user returns — so a dropped request no longer strands the upload.
+        savePendingUpload({ projectId, publicUrl, videoDurationFrames, mode: inputMode, email: resolvedEmail, filePath });
+        fireTranscription(projectId, publicUrl, videoDurationFrames).catch(() => { /* polling / recovery will handle it */ });
+        startVideoPolling(projectId, inputMode, resolvedEmail);
       } catch (error) {
         // Clean up orphaned DB row and storage file so the user can retry cleanly
         if (projectId) {

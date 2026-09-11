@@ -40,6 +40,8 @@ interface Generation {
   status: string;
   source_mode: string | null;
   created_at: string;
+  broll_count?: number | null;
+  broll_error?: string | null;
 }
 
 const STUCK_STATUSES = new Set(["processing", "generating_broll", "transcribing"]);
@@ -266,6 +268,12 @@ export default function Admin() {
     .map(s => ({ status: s, count: gens.filter(g => g.status === s).length }))
     .filter(e => e.count > 0);
 
+  // Talking-head (upload) renders where b-roll was recorded but came back empty or errored.
+  // Rows with both fields null predate the instrumentation and are skipped.
+  const brollIssues = gens.filter(
+    g => g.source_mode === "video" && (g.broll_error != null || g.broll_count === 0),
+  );
+
   const chartData = statsData ? groupByDay(statsData.gens30d) : [];
   const articleCount = statsData?.gens30d.filter(g => g.source_mode === "article").length ?? 0;
   const uploadCount = statsData ? statsData.gens30d.length - articleCount : 0;
@@ -482,6 +490,36 @@ export default function Admin() {
                             <td style={{ ...tdStyle, textAlign: "right", color: C.fgDim }}>
                               {gens.length ? `${((e.count / gens.length) * 100).toFixed(1)}%` : "—"}
                             </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {brollIssues.length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontFamily: mono, fontSize: 11, color: C.warning, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10 }}>
+                    ⚠ B-roll Issues (talking-head)
+                  </div>
+                  <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>Job ID</th>
+                          <th style={{ ...thStyle, textAlign: "right" }}>B-roll</th>
+                          <th style={thStyle}>Reason</th>
+                          <th style={thStyle}>When</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {brollIssues.map(g => (
+                          <tr key={g.id}>
+                            <td style={{ ...tdStyle, color: C.fgDim, fontSize: 11 }}>{g.id.slice(0, 8)}…</td>
+                            <td style={{ ...tdStyle, textAlign: "right", color: g.broll_count === 0 ? C.warning : C.fg }}>{g.broll_count ?? "—"}</td>
+                            <td style={{ ...tdStyle, color: C.fgMuted, fontFamily: mono, fontSize: 11 }}>{g.broll_error ?? "—"}</td>
+                            <td style={{ ...tdStyle, color: C.fgDim }}>{fmtDate(g.created_at)}</td>
                           </tr>
                         ))}
                       </tbody>

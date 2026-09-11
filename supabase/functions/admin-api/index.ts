@@ -19,6 +19,8 @@ interface Generation {
   status: string;
   source_mode: string | null;
   created_at: string;
+  broll_count: number | null;
+  broll_error: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
       case "pipeline": {
         const { data } = await supabase
           .from("ai_generations")
-          .select("id, status, source_mode, created_at")
+          .select("id, status, source_mode, created_at, broll_count, broll_error")
           .order("created_at", { ascending: false })
           .limit(500);
         return json({ gens: (data as Generation[]) || [] });

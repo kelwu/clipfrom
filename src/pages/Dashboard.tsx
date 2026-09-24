@@ -49,7 +49,7 @@ const C = {
 const mono = '"Geist Mono", "Fira Mono", monospace';
 const sans = '"Geist", system-ui, sans-serif';
 
-function StatusBadge({ status }: { status: string | null }) {
+function StatusBadge({ status, mode }: { status: string | null; mode: Mode }) {
   const s = status ?? "";
   const isComplete   = s === "complete";
   const isFailed     = s.includes("error") || s.includes("failed");
@@ -58,7 +58,8 @@ function StatusBadge({ status }: { status: string | null }) {
     : isFailed
     ? { label: "Failed",       bg: C.redSubtle,    border: C.redBorder,    dot: C.red,    text: C.red,    pulse: false }
     // Waiting on the user, not the pipeline — don't show a pulsing "Generating".
-    : s === "videos_ready"
+    // Only article clips pause for review; for uploads "videos_ready" means the final render is running.
+    : s === "videos_ready" && mode === "article"
     ? { label: "Needs review", bg: C.accentSubtle, border: C.accentBorder, dot: C.accent, text: C.accent, pulse: false }
     : s === "captions_ready"
     ? { label: "Draft",        bg: C.accentSubtle, border: C.accentBorder, dot: C.fgDim,  text: C.fgMuted, pulse: false }
@@ -163,7 +164,7 @@ function ProjectCard({ project, onClick, onRetry, retrying }: {
           <VideoThumbnail url={gen?.stitched_video_url ?? gen?.video_url_1 ?? null} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, oklch(0% 0 0 / 0.5) 0%, transparent 50%)" }}/>
           <div style={{ position: "absolute", top: 10, left: 10 }}>
-            <StatusBadge status={gen?.status ?? null} />
+            <StatusBadge status={gen?.status ?? null} mode={projectMode(project)} />
           </div>
           <div className="db-play-overlay" style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",

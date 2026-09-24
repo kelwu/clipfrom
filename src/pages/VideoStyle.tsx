@@ -7,13 +7,13 @@ import { UserVideoCaption } from "@/remotion/UserVideoCaption";
 import type { TranscriptWord, KeepSegment, BrollLayout } from "@/remotion/UserVideoCaption";
 
 const BROLL_LAYOUTS: { value: BrollLayout | "auto"; label: string; desc: string }[] = [
-  { value: "auto",           label: "Auto",          desc: "Bottom + corner rotation — avoids face" },
-  { value: "bottom-third",   label: "Bottom third",  desc: "Lower 33%, face always visible" },
-  { value: "corner",         label: "Corner PiP",    desc: "Small top-right panel" },
-  { value: "floating",       label: "Floating",      desc: "Framed panel with side margins" },
-  { value: "top-third",      label: "Top third",     desc: "Upper 33%, face in lower portion" },
-  { value: "top-half",       label: "Top half",      desc: "Upper 50%, face below" },
-  { value: "top-two-thirds", label: "Top two-thirds", desc: "Upper 67%, small face strip" },
+  { value: "auto",               label: "Auto (AI)",       desc: "AI picks the best layout for each moment" },
+  { value: "fullscreen",         label: "Full screen",     desc: "B-roll takes over the frame" },
+  { value: "top-three-quarters", label: "Top ¾",           desc: "B-roll dominates, face strip below" },
+  { value: "top-half",           label: "Top half",        desc: "Split screen, face below" },
+  { value: "bottom-third",       label: "Bottom third",    desc: "Lower band, face always visible" },
+  { value: "corner",             label: "Corner PiP",      desc: "Small top-right panel" },
+  { value: "floating",           label: "Floating",        desc: "Framed panel with side margins" },
 ];
 
 // ── Constants ─────────────────────────────────────────────────────────────────

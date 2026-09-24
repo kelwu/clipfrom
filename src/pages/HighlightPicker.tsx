@@ -17,7 +17,7 @@ const C = {
 } as const;
 
 type CaptionStyle = "pill" | "bold" | "lower-third" | "none";
-type BrollLayout = "auto" | "floating" | "top-third" | "top-half" | "top-two-thirds" | "corner";
+type BrollLayout = "auto" | "fullscreen" | "top-three-quarters" | "top-half" | "bottom-third" | "corner" | "floating";
 
 interface Segment {
   id: string;
@@ -44,13 +44,13 @@ const CAPTION_STYLES: { value: CaptionStyle; label: string; desc: string }[] = [
 ];
 
 const BROLL_LAYOUTS: { value: BrollLayout; label: string }[] = [
-  { value: "auto", label: "Auto-rotate" },
+  { value: "auto", label: "Auto (AI)" },
+  { value: "fullscreen", label: "Full screen" },
+  { value: "top-three-quarters", label: "Top ¾" },
+  { value: "top-half", label: "Top half" },
   { value: "bottom-third", label: "Bottom third" },
   { value: "corner", label: "Corner PiP" },
   { value: "floating", label: "Floating panel" },
-  { value: "top-third", label: "Top third" },
-  { value: "top-half", label: "Top half" },
-  { value: "top-two-thirds", label: "Top two-thirds" },
 ];
 
 const Spinner = ({ size = 14 }: { size?: number }) => (

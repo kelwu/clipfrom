@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import UpgradeModal from "@/components/UpgradeModal";
 import { toast } from "sonner";
 import * as tus from "tus-js-client";
 import { supabase } from "@/lib/supabase";
@@ -45,7 +47,7 @@ const FEATURES = [
   {
     icon: <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M2 6l7 5 7-5"/></svg>,
     title: "Email delivery",
-    desc: "Drop your URL and walk away. We'll ping you the moment the render lands — usually 3 minutes.",
+    desc: "Drop your URL and walk away. We'll ping you the moment the render lands — usually 5–10 minutes.",
   },
 ];
 
@@ -59,9 +61,9 @@ const TRANSITIONS = [
 ];
 
 const FAQ_ITEMS = [
-  { q: "How long does a video take to render?", a: "About three minutes on average. You'll get an email the moment it's ready — no need to keep the tab open." },
+  { q: "How long does a video take to render?", a: "Usually 5–10 minutes. Article videos pause once so you can review the clips; after you hit render you can close the tab and we'll email you when it's ready." },
   { q: "What kinds of articles work best?", a: "Anything with a clear narrative — news stories, blog posts, opinion pieces, newsletter editions. We've also had users feed in research paper abstracts with great results." },
-  { q: "Can I edit the video after it's generated?", a: "Yes. You can re-pick a different hook for any clip, swap transition styles, or tweak the final IG caption — all before you download." },
+  { q: "Can I edit the video after it's generated?", a: "Before the final render you can edit or drop any caption, swap individual clips, and change the voice. After rendering you can still tweak the Instagram caption; to change the video itself, generate it again." },
   { q: "Does ClipFrom post to Instagram for me?", a: "Not yet — we deliver the video file and the caption as a copy-paste block. Direct publishing is on our roadmap." },
   { q: "What about TikTok and YouTube Shorts?", a: "Same 9:16 output works for all three. Paste, post, done." },
   { q: "Who owns the generated videos?", a: "You do. Full commercial rights on every plan." },
@@ -116,6 +118,7 @@ const ArticleInput = () => {
 
   const [credits, setCredits] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const navigate = useNavigate();
   const { user, session } = useAuth();
@@ -479,6 +482,7 @@ const ArticleInput = () => {
   /* ── Landing page ── */
   return (
     <>
+      {showUpgrade && createPortal(<UpgradeModal onClose={() => setShowUpgrade(false)} />, document.body)}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -676,18 +680,20 @@ const ArticleInput = () => {
                         return (
                           <button
                             type="submit"
-                            disabled={!!outOfCredits || videoTooLarge}
+                            disabled={videoTooLarge}
+                            // Out of credits: open the upgrade modal instead of dead-ending on a disabled button.
+                            onClick={(e) => { if (outOfCredits) { e.preventDefault(); setShowUpgrade(true); } }}
                             style={{
-                              width: "100%", padding: "13px 0", background: outOfCredits || videoTooLarge ? "oklch(30% 0.01 250)" : C.accent,
+                              width: "100%", padding: "13px 0", background: videoTooLarge ? "oklch(30% 0.01 250)" : C.accent,
                               border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700,
-                              color: outOfCredits || videoTooLarge ? "oklch(55% 0.01 250)" : "oklch(11% 0.018 255)",
-                              cursor: outOfCredits || videoTooLarge ? "not-allowed" : "pointer",
+                              color: videoTooLarge ? "oklch(55% 0.01 250)" : "oklch(11% 0.018 255)",
+                              cursor: videoTooLarge ? "not-allowed" : "pointer",
                               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                              boxShadow: outOfCredits || videoTooLarge ? "none" : "0 4px 20px oklch(72% 0.17 280 / 0.35), inset 0 1px 0 oklch(100% 0 0 / 0.15)",
+                              boxShadow: videoTooLarge ? "none" : "0 4px 20px oklch(72% 0.17 280 / 0.35), inset 0 1px 0 oklch(100% 0 0 / 0.15)",
                               transition: "all 0.15s",
                             }}
                           >
-                            {outOfCredits ? "No credits remaining" : videoTooLarge ? "Video too large (max 200 MB)" : inputMode === "video" ? "Upload & Transcribe" : "Generate my video"}
+                            {outOfCredits ? "Out of credits — upgrade to continue" : videoTooLarge ? "Video too large (max 200 MB)" : inputMode === "video" ? "Upload & Transcribe" : "Generate my video"}
                             {!outOfCredits && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>}
                           </button>
                         );
@@ -698,7 +704,7 @@ const ArticleInput = () => {
                   <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 14 }}>
                     {(inputMode === "video"
                       ? ["9:16 vertical", "Auto captions", "B-roll added"]
-                      : ["9:16 vertical", "AI voiceover", "~3 min render"]
+                      : ["9:16 vertical", "AI voiceover", "~5–10 min render"]
                     ).map(item => (
                       <span key={item} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.fgMuted, fontFamily: mono }}>
                         <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent, display: "inline-block" }} />
@@ -862,7 +868,7 @@ const ArticleInput = () => {
         {/* ── Stats bar ── */}
         <div style={{ background: C.surface, borderTop: `1px solid ${C.strokeSoft}`, borderBottom: `1px solid ${C.strokeSoft}`, padding: "16px 24px" }}>
           <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-            {["~3 min render", "5 clips", "4 voices", "6 transitions", "1080p", "0 code"].map((stat, i, arr) => (
+            {["~5–10 min render", "5 clips", "4 voices", "6 transitions", "1080p", "0 code"].map((stat, i, arr) => (
               <span key={stat} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontFamily: mono, fontSize: 12, color: C.fgMuted }}>{stat}</span>
                 {i < arr.length - 1 && <span style={{ color: C.fgDim }}>·</span>}
@@ -1101,7 +1107,7 @@ const ArticleInput = () => {
                   color: "oklch(14% 0.015 250)", cursor: "pointer", boxShadow: "0 0 30px oklch(72% 0.17 280 / 0.3)" }}>
                 Generate my first video →
               </button>
-              <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, marginTop: 16 }}>Free to try · No credit card · ~3 min render</div>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, marginTop: 16 }}>Free to try · No credit card · ~5–10 min render</div>
             </div>
           </div>
         </section>

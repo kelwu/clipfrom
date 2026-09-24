@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Player } from "@remotion/player";
-import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
 import { StudioComposition, type CaptionStyle } from "@/components/studio/StudioComposition";
 
 const CLIP_DURATION = 150;
@@ -31,7 +28,6 @@ export default function Studio() {
   const location = useLocation();
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const { session } = useAuth();
 
   const stateResult = location.state?.result ?? {};
   const initialCaptions: string[] = location.state?.captions ?? ["", "", "", "", ""];
@@ -55,50 +51,9 @@ export default function Studio() {
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(initialStyle);
   const [transitionStyle, setTransitionStyle] = useState(initialTransition);
   const [expandedCaption, setExpandedCaption] = useState<number | null>(null);
-  const [rerendering, setRerendering] = useState(false);
 
   const transitionDuration = transitionStyle === "cut" ? 5 : 35;
   const duration = totalFrames(clips.length || 5, transitionDuration);
-
-  const handleRerender = async () => {
-    setRerendering(true);
-    try {
-      const { data: projectData, error } = await supabase
-        .from("projects")
-        .insert({ status: "processing", article_url: null })
-        .select("id").single();
-      if (error) throw error;
-
-      const newProjectId = projectData.id;
-      const useAgentPipeline = import.meta.env.VITE_USE_AGENT_PIPELINE === "true";
-      const webhook = useAgentPipeline ? import.meta.env.VITE_AGENT_VIDEO_FUNCTION_URL : import.meta.env.VITE_N8N_POLLING_WEBHOOK;
-      if (webhook) {
-        await fetch(webhook, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(useAgentPipeline && {
-              "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-              "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-            }),
-          },
-          body: JSON.stringify({
-            project_id: newProjectId,
-            captions: captions.map((text, i) => ({ id: i + 1, text })),
-            captionStyle,
-            transitionStyle,
-          }),
-        });
-      }
-
-      navigate(`/results/${newProjectId}`, {
-        state: { projectId: newProjectId, captions: captions.map((text, i) => ({ id: i + 1, text })), captionStyle, transitionStyle },
-      });
-    } catch (err) {
-      toast.error("Failed to start re-render");
-      setRerendering(false);
-    }
-  };
 
   return (
     <div className="flex flex-col h-screen bg-[#0a0a0a] text-white overflow-hidden">
@@ -122,28 +77,6 @@ export default function Studio() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleRerender}
-            disabled={rerendering}
-            className="flex items-center gap-2 px-4 py-1.5 border border-amber-500/40 hover:border-amber-500/70 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
-          >
-            {rerendering ? (
-              <>
-                <svg className="animate-spin" width="13" height="13" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-                Starting…
-              </>
-            ) : (
-              <>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="1,4 1,10 7,10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
-                </svg>
-                Re-render
-              </>
-            )}
-          </button>
           {stitchedVideoUrl && (
             <a
               href={stitchedVideoUrl}

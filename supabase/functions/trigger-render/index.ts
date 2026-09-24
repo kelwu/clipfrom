@@ -45,14 +45,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify project is in clips_ready / videos_ready state
-    const { data: gen } = await supabase
+    // Atomically claim the render: only one request can move the job out of the ready state,
+    // so a double-click or retry can't launch two Lambda renders.
+    const { data: prior } = await supabase
+      .from("ai_generations").select("status").eq("project_id", project_id).maybeSingle();
+    const { data: claimed } = await supabase
       .from("ai_generations")
-      .select("status")
+      .update({ status: "render_queued" })
       .eq("project_id", project_id)
-      .maybeSingle();
-    if (!gen || !["videos_ready", "clips_ready"].includes(gen.status)) {
-      return new Response(JSON.stringify({ error: "Project is not in clips_ready state" }), {
+      .in("status", ["videos_ready", "clips_ready"])
+      .select("id");
+    if (!claimed || claimed.length === 0) {
+      return new Response(JSON.stringify({ error: "This video is already rendering or isn't ready to render" }), {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -66,6 +70,10 @@ Deno.serve(async (req) => {
 
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
+      // Release the claim so the user can try again.
+      await supabase.from("ai_generations")
+        .update({ status: prior?.status ?? "videos_ready" })
+        .eq("project_id", project_id).eq("status", "render_queued");
       throw new Error(`render-clips failed: ${pipelineRes.status} ${errText}`);
     }
 

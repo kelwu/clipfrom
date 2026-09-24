@@ -5,6 +5,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
+// Must match agent-video's PRESET_VOICE_IDS and the VOICES lists in the UI.
+const PRESET_VOICE_IDS = new Set(["KXOzch1bNSOicTxNAakl", "EXAVITQu4vr4xnSDxMaL", "pNInz6obpgDQGcFmaJgB"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -45,13 +49,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Only platform voices or the caller's own cloned voice — never another user's clone.
+    if (voice_id && !PRESET_VOICE_IDS.has(voice_id)) {
+      const { data: prof } = await supabaseAdmin
+        .from("user_profiles").select("cloned_voice_id").eq("id", user.id).maybeSingle();
+      if (prof?.cloned_voice_id !== voice_id) {
+        return new Response(JSON.stringify({ error: "Voice not available" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Re-generate voiceover with the chosen voice — reuses the existing function
+    // (internal endpoint gated by PIPELINE_SECRET; without the header it returns 403).
     const voRes = await fetch(`${supabaseUrl}/functions/v1/generate-voiceover-and-upload`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceKey}`,
         apikey: serviceKey,
+        "x-pipeline-secret": PIPELINE_SECRET,
       },
       body: JSON.stringify({
         ai_gen_id: gen.id,

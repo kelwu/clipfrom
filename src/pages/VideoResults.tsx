@@ -27,6 +27,21 @@ const Spinner = ({ size = 14 }: { size?: number }) => (
   </svg>
 );
 
+// The `download` attribute is ignored for cross-origin links (renders live on S3), so fetch
+// the file as a blob to force a real download; fall back to opening it in a new tab.
+async function downloadFile(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(String(res.status));
+    const blobUrl = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = blobUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+  } catch {
+    window.open(url, "_blank", "noopener");
+  }
+}
+
 export default function VideoResults() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -181,6 +196,10 @@ export default function VideoResults() {
 
     const triggerVideoGeneration = async () => {
       if (triggeredRef.current) return;
+      // Only start a (paid) generation when the user explicitly launched it from the
+      // caption editor / video style screen — never just because this page was opened
+      // (e.g. from the Library or after a refresh).
+      if (!location.state?.startGeneration) return;
       triggeredRef.current = true;
       const { data: existing } = await supabase
         .from("ai_generations").select("status").eq("project_id", projectId).maybeSingle();
@@ -199,7 +218,7 @@ export default function VideoResults() {
               "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
               "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
-            body: JSON.stringify({ project_id: projectId, captionStyle, user_email: userEmail }),
+            body: JSON.stringify({ project_id: projectId, captionStyle }),
           });
         } else {
           // Article mode: call agent-video → Railway pipeline
@@ -211,7 +230,12 @@ export default function VideoResults() {
               "Authorization": `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
               "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
             },
-            body: JSON.stringify({ project_id: projectId, user_email: userEmail, captionStyle, transitionStyle, videoSource, ...(showHookCard ? { showHookCard: true } : {}), ...(captionFont ? { captionFont } : {}), ...(hookText ? { hookText } : {}) }),
+            body: JSON.stringify({
+              project_id: projectId, captionStyle, transitionStyle, videoSource,
+              // The user's edited (and possibly reduced) captions — persisted server-side before rendering.
+              ...(approvedCaptions.length > 0 ? { captions: approvedCaptions.map((c) => c.text) } : {}),
+              ...(showHookCard ? { showHookCard: true } : {}), ...(captionFont ? { captionFont } : {}), ...(hookText ? { hookText } : {}),
+            }),
           });
         }
 
@@ -367,7 +391,9 @@ export default function VideoResults() {
   const handleSaveOutro = async () => {
     if (!user) return;
     setSavingOutro(true);
-    await supabase.from("user_profiles").upsert({ id: user.id, caption_outro: captionOutro, updated_at: new Date().toISOString() });
+    await supabase.from("user_profiles")
+      .update({ caption_outro: captionOutro, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
     setSavingOutro(false);
     setEditingOutro(false);
     setOutroSaved(true);
@@ -492,7 +518,7 @@ export default function VideoResults() {
             <p className="text-gray-400 text-sm">
               {renderProblem === "timeout"
                 ? "Your video is still rendering on our servers. We'll email you when it's ready — you can safely leave this page."
-                : "Something went wrong while rendering this video. You can try again from your library."}
+                : "Something went wrong while rendering this video. Credits for failed renders are refunded automatically — you can try again from your library."}
             </p>
             <div className="flex gap-3 justify-center pt-2">
               <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors">
@@ -624,7 +650,7 @@ export default function VideoResults() {
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                 </svg>
                 <div>
-                  <p className="text-sm text-gray-200">This usually takes <span className="text-white font-medium">10–15 minutes</span>.</p>
+                  <p className="text-sm text-gray-200">This usually takes <span className="text-white font-medium">5–10 minutes</span>.</p>
                   <p className="text-xs text-gray-400 mt-0.5">We'll email <span className="text-gray-300">{userEmail}</span> when your video is ready — you can safely leave this page.</p>
                 </div>
               </div>
@@ -667,10 +693,10 @@ export default function VideoResults() {
               </div>
 
               <button
-                onClick={() => { clearInterval(pollingRef.current!); navigate("/"); }}
-                className="w-full mt-4 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg text-xs font-semibold transition-colors"
+                onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }}
+                className="w-full mt-4 py-2 border border-gray-700 text-gray-300 hover:bg-white/5 rounded-lg text-xs font-semibold transition-colors"
               >
-                Stop Engine
+                Leave page (keeps rendering)
               </button>
             </div>
           </div>
@@ -697,9 +723,6 @@ export default function VideoResults() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button className="px-4 py-1.5 border border-gray-700 hover:border-gray-600 rounded-lg text-sm font-medium text-gray-300 hover:text-white transition-colors">
-            Refine Script
-          </button>
           {igConnected === false ? (
             <button
               onClick={handleConnectInstagram}
@@ -739,20 +762,10 @@ export default function VideoResults() {
               )}
             </button>
           )}
-          <button
-            onClick={() => navigate(`/studio/${projectId}`, {
-              state: { result, captionStyle, transitionStyle, captions: displayCaptions, content },
-            })}
-            className="flex items-center gap-2 px-4 py-1.5 border border-gray-700 hover:border-gray-500 rounded-lg text-sm font-medium text-gray-300 hover:text-white transition-colors"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-            Open Editor
-          </button>
           <a
             href={result.stitched_video_url!}
             download
+            onClick={(e) => { e.preventDefault(); downloadFile(result.stitched_video_url!, `clipfrom-${projectId}.mp4`); }}
             className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-semibold transition-colors"
           >
             Export All
@@ -802,6 +815,7 @@ export default function VideoResults() {
             <a
               href={result.stitched_video_url!}
               download
+              onClick={(e) => { e.preventDefault(); downloadFile(result.stitched_video_url!, `clipfrom-${projectId}.mp4`); }}
               className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-sm font-bold transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

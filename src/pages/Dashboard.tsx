@@ -10,14 +10,23 @@ interface Project {
   id: string;
   article_url: string | null;
   created_at: string;
+  source_mode: string | null;
   ai_generations: {
     stitched_video_url: string | null;
     video_url_1: string | null;
     status: string | null;
     description: string | null;
     caption_options: string[] | null;
+    source_mode: string | null;
+    render_params: { captionStyle?: string; transitionStyle?: string; captionFont?: string } | null;
   } | null;
 }
+
+type Mode = "article" | "video" | "long_video";
+const projectMode = (p: Project): Mode => {
+  const m = p.source_mode ?? p.ai_generations?.source_mode ?? "article";
+  return m === "video" || m === "long_video" ? m : "article";
+};
 
 const C = {
   bg: "oklch(10% 0.018 255)",
@@ -45,10 +54,15 @@ function StatusBadge({ status }: { status: string | null }) {
   const isComplete   = s === "complete";
   const isFailed     = s.includes("error") || s.includes("failed");
   const cfg = isComplete
-    ? { label: "Ready",      bg: C.accentSubtle, border: C.accentBorder, dot: C.accent, text: C.accent, pulse: false }
+    ? { label: "Ready",        bg: C.accentSubtle, border: C.accentBorder, dot: C.accent, text: C.accent, pulse: false }
     : isFailed
-    ? { label: "Failed",     bg: C.redSubtle,    border: C.redBorder,    dot: C.red,    text: C.red,    pulse: false }
-    : { label: "Generating", bg: C.amberSubtle,  border: C.amberBorder,  dot: C.amber,  text: C.amber,  pulse: true  };
+    ? { label: "Failed",       bg: C.redSubtle,    border: C.redBorder,    dot: C.red,    text: C.red,    pulse: false }
+    // Waiting on the user, not the pipeline — don't show a pulsing "Generating".
+    : s === "videos_ready"
+    ? { label: "Needs review", bg: C.accentSubtle, border: C.accentBorder, dot: C.accent, text: C.accent, pulse: false }
+    : s === "captions_ready"
+    ? { label: "Draft",        bg: C.accentSubtle, border: C.accentBorder, dot: C.fgDim,  text: C.fgMuted, pulse: false }
+    : { label: "Generating",   bg: C.amberSubtle,  border: C.amberBorder,  dot: C.amber,  text: C.amber,  pulse: true  };
 
   return (
     <div style={{
@@ -213,7 +227,7 @@ export default function Dashboard() {
     if (!user) return;
     supabase
       .from("projects")
-      .select(`id, article_url, created_at, ai_generations ( stitched_video_url, video_url_1, status, description, caption_options )`)
+      .select(`id, article_url, created_at, source_mode, ai_generations ( stitched_video_url, video_url_1, status, description, caption_options, source_mode, render_params )`)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -222,31 +236,73 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, [user?.id]);
 
-  const handleRetry = async (projectId: string) => {
+  // Open a project on the screen that matches its mode and where it is in the flow.
+  // Opening a card never starts a paid render by itself.
+  const openProject = (p: Project) => {
+    const mode = projectMode(p);
+    const status = p.ai_generations?.status ?? "";
+    if (status === "captions_ready") {
+      if (mode === "video") return navigate(`/video-style/${p.id}`);
+      if (mode === "long_video") return navigate(`/highlight-picker/${p.id}`);
+      return navigate("/editor", { state: { projectId: p.id, userEmail: user?.email } });
+    }
+    if (mode === "article" && status === "videos_ready") return navigate(`/review/${p.id}`);
+    navigate(`/results/${p.id}`, { state: { projectId: p.id, sourceMode: mode } });
+  };
+
+  const handleRetry = async (p: Project) => {
     if (!user || !session) return;
-    setRetrying(projectId);
+    const mode = projectMode(p);
+    const status = p.ai_generations?.status ?? "";
+    if (status === "transcription_error") {
+      toast.error("That upload couldn't be transcribed — please upload the video again.");
+      navigate("/");
+      return;
+    }
+    if (status === "caption_error") {
+      // Captions were never generated, so there's nothing to render — start over from the article.
+      toast.error("We couldn't write captions for that article — try it again or paste the text directly.");
+      navigate("/");
+      return;
+    }
+    setRetrying(p.id);
     try {
-      await supabase
+      const { error: resetError } = await supabase
         .from("ai_generations")
         .update({
           status: "captions_ready", debug_log: null, stitched_video_url: null,
           video_url_1: null, video_url_2: null, video_url_3: null,
           video_url_4: null, video_url_5: null, kling_task_ids: null,
         })
-        .eq("project_id", projectId);
+        .eq("project_id", p.id);
+      if (resetError) throw resetError;
 
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-video`, {
+      // Uploads go back to their style screen so the user's own settings are reused.
+      if (mode === "video") { navigate(`/video-style/${p.id}`); return; }
+      if (mode === "long_video") { navigate(`/highlight-picker/${p.id}`); return; }
+
+      // Article: re-run with the settings the user originally chose (defaults if unknown).
+      const rp = p.ai_generations?.render_params ?? {};
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-video`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`,
           "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ project_id: projectId, user_email: user.email, captionStyle: "pill", transitionStyle: "cut", videoSource: "stock" }),
+        body: JSON.stringify({
+          project_id: p.id,
+          captionStyle: rp.captionStyle ?? "pill",
+          transitionStyle: rp.transitionStyle ?? "cut",
+          videoSource: "stock",
+          ...(rp.captionFont ? { captionFont: rp.captionFont } : {}),
+        }),
       });
+      if (res.status === 402) { toast.error("You're out of credits. Upgrade to retry."); setRetrying(null); return; }
+      if (!res.ok) throw new Error(`Retry failed (${res.status})`);
 
       toast.success("Retrying video generation…");
-      navigate(`/results/${projectId}`);
+      navigate(`/results/${p.id}`, { state: { projectId: p.id, sourceMode: "article" } });
     } catch {
       toast.error("Could not retry — please try again");
       setRetrying(null);
@@ -341,10 +397,10 @@ export default function Dashboard() {
           <div style={{ maxWidth: 980, display: "flex", flexDirection: "column", gap: 36 }}>
             {inProgress.length > 0 && (
               <section>
-                <SectionLabel>Generating</SectionLabel>
+                <SectionLabel>In progress</SectionLabel>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
                   {inProgress.map(p => (
-                    <ProjectCard key={p.id} project={p} onClick={() => navigate(`/results/${p.id}`)} />
+                    <ProjectCard key={p.id} project={p} onClick={() => openProject(p)} />
                   ))}
                 </div>
               </section>
@@ -354,7 +410,7 @@ export default function Dashboard() {
                 <SectionLabel>Failed</SectionLabel>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
                   {failed.map(p => (
-                    <ProjectCard key={p.id} project={p} onClick={() => navigate(`/results/${p.id}`)} onRetry={() => handleRetry(p.id)} retrying={retrying === p.id} />
+                    <ProjectCard key={p.id} project={p} onClick={() => openProject(p)} onRetry={() => handleRetry(p)} retrying={retrying === p.id} />
                   ))}
                 </div>
               </section>
@@ -364,7 +420,7 @@ export default function Dashboard() {
                 <SectionLabel>Ready</SectionLabel>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
                   {complete.map(p => (
-                    <ProjectCard key={p.id} project={p} onClick={() => navigate(`/results/${p.id}`)} />
+                    <ProjectCard key={p.id} project={p} onClick={() => openProject(p)} />
                   ))}
                 </div>
               </section>

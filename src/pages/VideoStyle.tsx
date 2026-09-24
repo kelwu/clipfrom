@@ -193,7 +193,7 @@ export default function VideoStyle() {
       .eq("project_id", projectId);
     setSaving(false);
     navigate(`/results/${projectId}`, {
-      state: { projectId, userEmail, captionStyle, sourceMode: "video", captions: [], transitionStyle: "cut", videoSource: "user" },
+      state: { projectId, startGeneration: true, userEmail, captionStyle, sourceMode: "video", captions: [], transitionStyle: "cut", videoSource: "user" },
     });
   };
 

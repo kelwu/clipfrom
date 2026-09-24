@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import AppShell from "@/components/layout/AppShell";
+import { supabase } from "@/lib/supabase";
 
 interface Caption {
   id: number;
@@ -122,7 +123,32 @@ export default function CaptionEditor() {
   }));
 
   const [captions, setCaptions] = useState<Caption[]>(initialCaptions);
+  // True when captions came from navigation state; otherwise load the saved ones from the DB
+  // (e.g. after a refresh or when resuming from the Library) so placeholders are never rendered.
+  const [captionsReady, setCaptionsReady] = useState<boolean>(Boolean(captions_data?.text1));
   const [isGenerating, setIsGenerating] = useState(false);
+
+  useEffect(() => {
+    if (captionsReady || !projectId) return;
+    let cancelled = false;
+    supabase
+      .from("ai_generations")
+      .select("caption_options")
+      .eq("project_id", projectId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const saved = Array.isArray(data?.caption_options)
+          ? (data!.caption_options as string[])
+          : data?.caption_options ? Object.values(data.caption_options as Record<string, string>) : [];
+        if (saved.length === 0) return;
+        setCaptions(saved.map((text, i) => ({
+          id: i + 1, text, enabled: true, wordCount: text.split(" ").filter(Boolean).length,
+        })));
+        setCaptionsReady(true);
+      });
+    return () => { cancelled = true; };
+  }, [captionsReady, projectId]);
   const [selectedPreset, setSelectedPreset] = useState<PresetId>("viral");
   const [showHookCard, setShowHookCard] = useState(false);
   const [hookText, setHookText] = useState("");
@@ -143,7 +169,11 @@ export default function CaptionEditor() {
   };
 
   const handleGenerate = async () => {
-    const enabledCaptions = captions.filter((c) => c.enabled);
+    if (!captionsReady) {
+      toast.error("Your captions are still loading — try again in a moment.");
+      return;
+    }
+    const enabledCaptions = captions.filter((c) => c.enabled && c.text.trim());
     if (enabledCaptions.length === 0) {
       toast.error("Please enable at least one caption to generate videos.");
       return;
@@ -155,6 +185,7 @@ export default function CaptionEditor() {
       state: {
         projectId,
         userEmail,
+        startGeneration: true,
         captions: enabledCaptions,
         captionStyle: preset.captionStyle,
         transitionStyle: preset.transitionStyle,
@@ -172,7 +203,7 @@ export default function CaptionEditor() {
         {/* Top bar */}
         <div className="border-b border-gray-800 bg-[#0d0d0d] px-6 py-3 flex items-center gap-3 flex-shrink-0">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

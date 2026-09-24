@@ -118,7 +118,7 @@ export default function OnboardingModal() {
           Create my first video →
         </button>
         <p style={{ textAlign: "center", fontSize: 11, color: "oklch(45% 0.01 250)", marginTop: 12 }}>
-          Takes about 10 minutes end-to-end.
+          Takes about 5–10 minutes end-to-end.
         </p>
       </div>
     </div>

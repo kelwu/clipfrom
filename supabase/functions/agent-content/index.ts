@@ -43,6 +43,11 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Once the row is marked "processing", every failure path must move it to a terminal
+  // status — otherwise it stays stuck and blocks retries with a 409. This step never charges
+  // a credit, so "caption_error" (not "failed") is used and no refund fires.
+  let markCaptionError: ((reason: string) => Promise<void>) | null = null;
+
   try {
     const payload: ContentWebhookPayload = await req.json();
     const { content, type, project_id } = payload;
@@ -99,6 +104,11 @@ Deno.serve(async (req) => {
       { project_id, status: "processing", caption_options: [] },
       { onConflict: "project_id" }
     );
+    markCaptionError = async (reason: string) => {
+      await supabase.from("ai_generations")
+        .update({ status: "caption_error", debug_log: reason.slice(0, 1000) })
+        .eq("project_id", project_id);
+    };
 
     // Fetch article text if URL was given
     let articleText = content;
@@ -147,6 +157,7 @@ Deno.serve(async (req) => {
       // Guard: if the page returned almost no text it's almost certainly
       // a JS-rendered page (React/Next.js) whose content requires a browser.
       if (articleText.trim().split(/\s+/).length < 80) {
+        await markCaptionError("Article text could not be extracted (likely JS-rendered page)");
         return new Response(
           JSON.stringify({
             error: "Could not extract article text from that URL — the page appears to be JavaScript-rendered and requires a browser to load. Try copying and pasting the article text directly into the text box instead.",
@@ -208,8 +219,15 @@ Rules for description:
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const data = jsonMatch
+      ? (JSON.parse(jsonMatch[0]) as { caption_options: string[]; description: string })
+      : null;
+    const validCaptions = Array.isArray(data?.caption_options)
+      && data!.caption_options.length >= 1
+      && data!.caption_options.every((c) => typeof c === "string" && c.trim().length > 0);
+    if (!data || !validCaptions) {
       // Claude refused or couldn't generate — surface a clean user-facing error
+      await markCaptionError(`No usable captions in model response: ${text.slice(0, 500)}`);
       return new Response(
         JSON.stringify({
           error: "The article didn't have enough content for ClipFrom to work with. Try a different URL, or paste the article text directly.",
@@ -217,11 +235,6 @@ Rules for description:
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const data = JSON.parse(jsonMatch[0]) as {
-      caption_options: string[];
-      description: string;
-    };
 
     // Write captions (and article images if any) to DB
     await supabase
@@ -241,6 +254,7 @@ Rules for description:
     );
   } catch (err) {
     console.error("agent-content error:", err);
+    if (markCaptionError) await markCaptionError(String(err)).catch(() => {});
     return new Response(
       JSON.stringify({ error: String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

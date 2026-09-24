@@ -84,7 +84,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const fileName = `voiceover-${ai_gen_id}.mp3`;
+    // Unique per generation: overwriting one fixed name kept the same public URL, so a voice
+    // swap could be served stale cached audio against the new caption timings.
+    // Old files are pruned by the cleanup-old-voiceovers cron.
+    const fileName = `voiceover-${ai_gen_id}-${Date.now()}.mp3`;
     const { error } = await supabase.storage
       .from("voiceovers")
       .upload(fileName, audioBytes, { contentType: "audio/mpeg", upsert: true });
@@ -96,16 +99,18 @@ serve(async (req) => {
       .getPublicUrl(fileName);
 
     // Derive per-caption and per-word frame offsets from ElevenLabs character timestamps
-    let caption_timings: number[] = [0, 0, 0, 0, 0];
-    let word_timings: number[][] = [[], [], [], [], []];
+    // Works for any caption count (users can exclude clips in the caption editor).
+    const n = cleanCaptions.length;
+    let caption_timings: number[] = new Array(n).fill(0);
+    let word_timings: number[][] = cleanCaptions.map(() => []);
 
     const alignment = elevenData.alignment;
-    if (cleanCaptions.length === 5 && alignment?.character_start_times_seconds) {
+    if (n > 0 && alignment?.character_start_times_seconds) {
       const startTimes: number[] = alignment.character_start_times_seconds;
 
       // Use emoji-stripped caption lengths — ElevenLabs skips emojis so raw .length would be off
       let charOffset = 0;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < n; i++) {
         if (i === 0) {
           caption_timings[0] = 0;
         } else {
@@ -135,9 +140,9 @@ serve(async (req) => {
     const isMonotonic = caption_timings.every((v, i) => i === 0 || v > caption_timings[i - 1]);
     if (!isMonotonic) {
       const totalFrames = Math.round((audio_duration_seconds ?? 30) * FPS);
-      caption_timings = Array.from({ length: 5 }, (_, j) => Math.round((j / 5) * totalFrames));
+      caption_timings = Array.from({ length: n }, (_, j) => Math.round((j / n) * totalFrames));
       // Reset word_timings to empty so the renderer falls back to uniform distribution
-      word_timings = [[], [], [], [], []];
+      word_timings = cleanCaptions.map(() => []);
     }
 
     return new Response(

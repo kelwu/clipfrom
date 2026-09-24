@@ -8,6 +8,9 @@ const corsHeaders = {
 const RAILWAY_URL = Deno.env.get("RAILWAY_URL") ?? "https://clipfrom-remotion-production.up.railway.app";
 const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
 
+// Statuses where a caption render (or its transcription) is already running.
+const IN_FLIGHT = ["transcribing", "generating_broll", "videos_ready", "remotion_rendering"];
+
 async function refundCredit(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
   await supabaseAdmin.rpc("increment_credit", { uid: userId });
   console.log(`Refunded 1 credit to user ${userId}`);
@@ -52,51 +55,49 @@ Deno.serve(async (req) => {
       });
     }
 
-    let creditDecremented = false;
     const userId = user.id;
+    const json = (body: unknown, status: number) =>
+      new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    if (!profile?.is_admin) {
-      const { data: newCredits } = await supabaseAdmin.rpc("decrement_credit", { uid: userId });
-      if (newCredits === null || newCredits === undefined) {
-        return new Response(JSON.stringify({ error: "no_credits" }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      creditDecremented = true;
-    }
-
-    // Verify caller owns this project (prevent cross-tenant IDOR)
+    // Verify caller owns this project (prevent cross-tenant IDOR) — before any charge
     const { data: project } = await supabaseAdmin
       .from("projects")
       .select("user_id")
       .eq("id", project_id)
       .maybeSingle();
-    if (!project || project.user_id !== userId) {
-      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
-      return new Response(JSON.stringify({ error: "Not your project" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!project || project.user_id !== userId) return json({ error: "Not your project" }, 403);
 
-    // Fetch ai_gen_id
     const { data: gen, error: genError } = await supabaseAdmin
       .from("ai_generations")
-      .select("id")
+      .select("id, status")
       .eq("project_id", project_id)
       .single();
+    if (genError || !gen?.id) return json({ error: "No transcript found for project" }, 400);
 
-    if (genError || !gen?.id) {
-      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
-      return new Response(JSON.stringify({ error: "No transcript found for project" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // A first render, a re-render of a finished video, and a retry after a failed
+    // render are all allowed; a render that is already in flight is not.
+    if (IN_FLIGHT.includes(gen.status)) return json({ error: "already_rendering" }, 409);
+
+    let creditDecremented = false;
+    if (!profile?.is_admin) {
+      const { data: newCredits } = await supabaseAdmin.rpc("decrement_credit", { uid: userId });
+      if (newCredits === null || newCredits === undefined) return json({ error: "no_credits" }, 402);
+      creditDecremented = true;
     }
 
-    // Mark as generating
-    await supabaseAdmin
+    // Atomic claim: only one request can move the project out of a startable state.
+    // Clearing the previous output keeps the results page from showing the old video
+    // as "done" while the new render runs.
+    const { data: claimed } = await supabaseAdmin
       .from("ai_generations")
-      .update({ status: "generating_broll" })
-      .eq("project_id", project_id);
+      .update({ status: "generating_broll", stitched_video_url: null, broll_plan: null, debug_log: null })
+      .eq("project_id", project_id)
+      .not("status", "in", `(${IN_FLIGHT.join(",")})`)
+      .select("id");
+    if (!claimed || claimed.length === 0) {
+      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
+      return json({ error: "already_rendering" }, 409);
+    }
 
     // Hand off to Railway pipeline (fire-and-forget)
     const pipelineRes = await fetch(`${RAILWAY_URL}/caption-video`, {
@@ -115,6 +116,12 @@ Deno.serve(async (req) => {
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
       if (creditDecremented) await refundCredit(supabaseAdmin, userId);
+      // Leave a retryable error state — staying in generating_broll would let the
+      // stuck-job sweeper flip it to 'failed' and refund the credit a second time.
+      await supabaseAdmin
+        .from("ai_generations")
+        .update({ status: "remotion_error", debug_log: `Pipeline start failed: ${pipelineRes.status}` })
+        .eq("project_id", project_id);
       throw new Error(`Pipeline start failed: ${pipelineRes.status} ${errText}`);
     }
 

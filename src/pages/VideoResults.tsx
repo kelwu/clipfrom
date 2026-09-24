@@ -203,7 +203,12 @@ export default function VideoResults() {
       triggeredRef.current = true;
       const { data: existing } = await supabase
         .from("ai_generations").select("status").eq("project_id", projectId).maybeSingle();
-      if (existing?.status && existing.status !== "captions_ready") return;
+      // Articles only start from captions_ready. Uploaded videos can also be re-rendered
+      // once finished or retried after a failed render — the server rejects in-flight ones.
+      const startable = sourceMode === "video"
+        ? !["transcribing", "generating_broll", "videos_ready", "remotion_rendering"].includes(existing?.status ?? "")
+        : existing?.status === "captions_ready";
+      if (existing?.status && !startable) return;
 
       try {
         let res: Response;
@@ -239,6 +244,7 @@ export default function VideoResults() {
           });
         }
 
+        if (res.status === 409) return; // already rendering (e.g. double click) — just follow it
         if (res.status === 402) {
           toast.error("You're out of credits. Upgrade to generate more videos.");
           navigate("/");
@@ -287,9 +293,10 @@ export default function VideoResults() {
       } catch (err) { console.error("Polling error:", err); return false; }
     };
 
-    triggerVideoGeneration();
+    // Start first, then poll — a re-render clears the old stitched_video_url, so polling
+    // before the trigger lands would show the previous video as "done".
     let attempts = 0;
-    poll(true).then((alreadyComplete) => {
+    triggerVideoGeneration().then(() => poll(true)).then((alreadyComplete) => {
       if (!alreadyComplete) {
         pollingRef.current = setInterval(() => {
           attempts++;

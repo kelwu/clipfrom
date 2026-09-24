@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { project_id, captionStyle = "pill", broll_layout = null, user_email = "" } = await req.json();
+    const { project_id, captionStyle = "pill", broll_layout = null } = await req.json();
     if (!project_id) {
       return new Response(JSON.stringify({ error: "project_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
         ai_gen_id: gen.id,
         captionStyle,
         broll_layout,
-        user_email,
+        user_email: user.email ?? "", // authenticated user only — never a body-supplied address
         user_id: user.id,
         secret: PIPELINE_SECRET,
       }),

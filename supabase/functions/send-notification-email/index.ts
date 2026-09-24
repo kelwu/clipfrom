@@ -2,23 +2,49 @@ import { Resend } from "npm:resend";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-pipeline-secret",
 };
+
+const PIPELINE_SECRET = Deno.env.get("PIPELINE_SECRET") ?? "";
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
-    const { to, video_url } = await req.json();
+  // Internal-only: called by the Railway render pipeline. Without this gate anyone holding
+  // the public anon key could send mail from noreply@clipfrom.ai to any address.
+  if (!PIPELINE_SECRET || req.headers.get("x-pipeline-secret") !== PIPELINE_SECRET) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-    if (!to || !video_url) {
+  try {
+    const { to, video_url: rawVideoUrl } = await req.json();
+
+    if (!to || !rawVideoUrl) {
       return new Response(
         JSON.stringify({ error: "Missing required fields: to, video_url" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    let parsedUrl: URL;
+    try { parsedUrl = new URL(String(rawVideoUrl)); } catch {
+      return new Response(JSON.stringify({ error: "Invalid video_url" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (parsedUrl.protocol !== "https:") {
+      return new Response(JSON.stringify({ error: "video_url must be https" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const video_url = escapeHtml(parsedUrl.toString());
 
     const resend = new Resend(Deno.env.get("RESEND_API_KEY")!);
 

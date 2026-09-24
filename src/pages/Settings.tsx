@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
+import UpgradeModal from "@/components/UpgradeModal";
 
 interface Profile {
   instagram_account_id: string | null;
@@ -43,6 +44,7 @@ export default function Settings() {
   const billingPreview = new URLSearchParams(location.search).get("billing") === "preview";
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [outro, setOutro] = useState("");
   const [editingOutro, setEditingOutro] = useState(false);
   const [savingOutro, setSavingOutro] = useState(false);
@@ -165,7 +167,8 @@ export default function Settings() {
     setSavingOutro(true);
     const { error } = await supabase
       .from("user_profiles")
-      .upsert({ id: user.id, caption_outro: outro, updated_at: new Date().toISOString() });
+      .update({ caption_outro: outro, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
     setSavingOutro(false);
     if (error) { toast.error("Failed to save"); return; }
     setProfile(p => p ? { ...p, caption_outro: outro } : p);
@@ -178,7 +181,8 @@ export default function Settings() {
     setSavingVoice(true);
     const { error } = await supabase
       .from("user_profiles")
-      .upsert({ id: user.id, preferred_voice_id: voiceId, updated_at: new Date().toISOString() });
+      .update({ preferred_voice_id: voiceId, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
     setSavingVoice(false);
     if (error) { toast.error("Failed to save voice"); return; }
     setProfile(p => p ? { ...p, preferred_voice_id: voiceId } : p);
@@ -191,14 +195,14 @@ export default function Settings() {
     setDisconnecting(true);
     const { error } = await supabase
       .from("user_profiles")
-      .upsert({
-        id: user.id,
+      .update({
         instagram_account_id: null,
         instagram_access_token: null,
         instagram_token_expires_at: null,
         instagram_username: null,
         updated_at: new Date().toISOString(),
-      });
+      })
+      .eq("id", user.id);
     setDisconnecting(false);
     if (error) { toast.error("Failed to disconnect"); return; }
     setProfile(p => p ? { ...p, instagram_account_id: null, instagram_username: null, instagram_token_expires_at: null } : p);
@@ -368,7 +372,7 @@ export default function Settings() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => navigate("/?upgrade=true")}
+                    onClick={() => setShowUpgrade(true)}
                     className="w-full px-4 py-2.5 bg-violet-500 hover:bg-violet-600 rounded-lg text-xs font-semibold text-white transition-colors"
                   >
                     Upgrade plan
@@ -603,6 +607,7 @@ export default function Settings() {
 
         </div>
       </div>
+      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
     </AppShell>
   );
 }

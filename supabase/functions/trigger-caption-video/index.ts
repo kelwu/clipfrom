@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { project_id, captionStyle = "pill", user_email = "" } = await req.json();
+    const { project_id, captionStyle = "pill" } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
         project_id,
         ai_gen_id: gen.id,
         captionStyle,
-        user_email,
+        user_email: user.email ?? "", // authenticated user only — never a body-supplied address
         user_id: userId,
         secret: PIPELINE_SECRET,
       }),

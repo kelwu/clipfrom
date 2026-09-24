@@ -38,30 +38,46 @@ Deno.serve(async (req) => {
       });
     }
 
-    let accessToken: string;
-    let accountId: string;
+    // Only allow posting a video the caller actually owns (a finished render or highlight
+    // segment of one of their projects) — never an arbitrary URL.
+    const { data: ownedProjects } = await adminSupabase
+      .from("projects").select("id").eq("user_id", user.id);
+    const ownedIds = (ownedProjects ?? []).map((p: { id: string }) => p.id);
+    let ownsVideo = false;
+    if (ownedIds.length > 0) {
+      const { data: genMatch } = await adminSupabase
+        .from("ai_generations").select("project_id")
+        .eq("stitched_video_url", video_url).in("project_id", ownedIds).limit(1);
+      ownsVideo = (genMatch ?? []).length > 0;
+      if (!ownsVideo) {
+        const { data: segMatch } = await adminSupabase
+          .from("video_segments").select("project_id")
+          .eq("output_url", video_url).in("project_id", ownedIds).limit(1);
+        ownsVideo = (segMatch ?? []).length > 0;
+      }
+    }
+    if (!ownsVideo) {
+      return new Response(JSON.stringify({ error: "Video not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Load credentials for the authenticated user only
+    // Post only to the caller's own connected account. (There is deliberately no fallback
+    // to a shared company account — that let any user post to it.)
     const { data: profile } = await adminSupabase
       .from("user_profiles")
       .select("instagram_access_token, instagram_account_id")
       .eq("id", user.id)
       .single();
 
-    if (profile?.instagram_access_token && profile?.instagram_account_id) {
-      accessToken = profile.instagram_access_token;
-      accountId = profile.instagram_account_id;
-    } else {
-      // Fall back to shared env-var account (admin posting scenario)
-      accessToken = Deno.env.get("INSTAGRAM_ACCESS_TOKEN")!;
-      accountId = Deno.env.get("INSTAGRAM_ACCOUNT_ID")!;
-      if (!accessToken || !accountId) {
-        return new Response(
-          JSON.stringify({ error: "Instagram account not connected. Please connect your Instagram account first." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    if (!profile?.instagram_access_token || !profile?.instagram_account_id) {
+      return new Response(
+        JSON.stringify({ error: "Instagram account not connected. Please connect your Instagram account first." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+    const accessToken: string = profile.instagram_access_token;
+    const accountId: string = profile.instagram_account_id;
 
     // Step 1 — Create media container
     const createRes = await fetch(

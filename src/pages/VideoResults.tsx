@@ -98,14 +98,14 @@ export default function VideoResults() {
         {
           label: "B-Roll",
           sub: "Sourcing stock clips per segment",
-          done: ["videos_ready", "complete"].includes(status),
+          done: ["videos_ready", "remotion_rendering", "complete"].includes(status),
           active: status === "generating_broll",
         },
         {
           label: "Rendering",
           sub: "Compositing captions + B-roll",
           done: status === "complete",
-          active: status === "videos_ready",
+          active: ["videos_ready", "remotion_rendering"].includes(status),
         },
       ]
     : [
@@ -137,7 +137,7 @@ export default function VideoResults() {
 
   // Derive a rough progress % for the processing engine header
   const processingProgress = stitchedReady ? 100
-    : status === "videos_ready" ? 90
+    : ["videos_ready", "remotion_rendering"].includes(status) ? 90
     : status === "kling_tasks_done" ? 70
     : status === "kling_tasks_created" ? 50
     : status === "generating_videos" ? 30

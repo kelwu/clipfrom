@@ -90,7 +90,11 @@ Deno.serve(async (req) => {
     // as "done" while the new render runs.
     const { data: claimed } = await supabaseAdmin
       .from("ai_generations")
-      .update({ status: "generating_broll", stitched_video_url: null, broll_plan: null, debug_log: null })
+      .update({
+        status: "generating_broll", stitched_video_url: null, broll_plan: null, debug_log: null,
+        // Lets the refund trigger return this credit exactly once if the render fails
+        ...(creditDecremented ? { credit_charged_at: new Date().toISOString() } : {}),
+      })
       .eq("project_id", project_id)
       .not("status", "in", `(${IN_FLIGHT.join(",")})`)
       .select("id");
@@ -115,12 +119,10 @@ Deno.serve(async (req) => {
 
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
-      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
-      // Leave a retryable error state — staying in generating_broll would let the
-      // stuck-job sweeper flip it to 'failed' and refund the credit a second time.
+      // 'failed' → the refund trigger returns the credit (once) via credit_charged_at
       await supabaseAdmin
         .from("ai_generations")
-        .update({ status: "remotion_error", debug_log: `Pipeline start failed: ${pipelineRes.status}` })
+        .update({ status: "failed", debug_log: `Pipeline start failed: ${pipelineRes.status}` })
         .eq("project_id", project_id);
       throw new Error(`Pipeline start failed: ${pipelineRes.status} ${errText}`);
     }

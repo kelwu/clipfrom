@@ -78,10 +78,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Mark pipeline as in-progress
+    // Mark pipeline as in-progress. credit_charged_at lets the refund trigger return
+    // this credit exactly once if the run fails from here on (no manual refunds after this).
     await supabaseAdmin
       .from("ai_generations")
-      .update({ status: "generating_broll" })
+      .update({ status: "generating_broll", ...(creditDecremented ? { credit_charged_at: new Date().toISOString() } : {}) })
       .eq("project_id", project_id);
 
     // Fire Railway (fire-and-forget from Railway's perspective)
@@ -101,7 +102,11 @@ Deno.serve(async (req) => {
 
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
-      if (creditDecremented) await supabaseAdmin.rpc("increment_credit", { uid: user.id });
+      // 'failed' → the refund trigger returns the credit (once) via credit_charged_at
+      await supabaseAdmin
+        .from("ai_generations")
+        .update({ status: "failed", debug_log: `Railway rejected request: ${pipelineRes.status}` })
+        .eq("project_id", project_id);
       throw new Error(`Railway rejected request: ${pipelineRes.status} ${errText}`);
     }
 

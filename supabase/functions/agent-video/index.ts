@@ -129,32 +129,48 @@ Deno.serve(async (req) => {
     // Always notify the authenticated user — never an address supplied in the request body.
     const user_email = callingUser.email ?? "";
 
+    // From here on the refund trigger owns refunds: a failure status on this row returns
+    // the credit exactly once via credit_charged_at (no manual refunds past this point).
+    if (creditDecremented) {
+      await supabaseAdmin.from("ai_generations")
+        .update({ credit_charged_at: new Date().toISOString() }).eq("id", gen.id);
+    }
+
     // Hand off to Railway pipeline (fire and forget — Railway responds 202 immediately)
-    const pipelineRes = await fetch(`${RAILWAY_URL}/generate-video`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project_id,
-        ai_gen_id: gen.id,
-        captions,
-        captionStyle,
-        transitionStyle,
-        videoSource,
-        user_email,
-        user_id: userId,
-        secret: PIPELINE_SECRET,
-        ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
-        ...(voiceId ? { voice_id: voiceId } : {}),
-        ...(showHookCard ? { showHookCard: true } : {}),
-        ...(captionFont ? { captionFont } : {}),
-        ...(hookText ? { hookText } : {}),
-        skipRender: true, // stop after clips_ready so user can review before render
-      }),
-    });
+    const markFailed = (reason: string) => supabaseAdmin.from("ai_generations")
+      .update({ status: "failed", debug_log: reason }).eq("id", gen.id);
+    let pipelineRes: Response;
+    try {
+      pipelineRes = await fetch(`${RAILWAY_URL}/generate-video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id,
+          ai_gen_id: gen.id,
+          captions,
+          captionStyle,
+          transitionStyle,
+          videoSource,
+          user_email,
+          user_id: userId,
+          secret: PIPELINE_SECRET,
+          ...(articleImages.length > 0 ? { article_images: articleImages } : {}),
+          ...(voiceId ? { voice_id: voiceId } : {}),
+          ...(showHookCard ? { showHookCard: true } : {}),
+          ...(captionFont ? { captionFont } : {}),
+          ...(hookText ? { hookText } : {}),
+          skipRender: true, // stop after clips_ready so user can review before render
+        }),
+      });
+    } catch (err) {
+      // Network failure reaching Railway — 'failed' lets the trigger refund the credit
+      await markFailed(`Pipeline unreachable: ${String(err).slice(0, 300)}`);
+      throw err;
+    }
 
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
-      if (creditDecremented) await refundCredit(supabaseAdmin, userId);
+      await markFailed(`Pipeline start failed: ${pipelineRes.status}`);
       throw new Error(`Pipeline start failed: ${pipelineRes.status} ${errText}`);
     }
 

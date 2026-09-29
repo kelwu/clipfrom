@@ -201,7 +201,7 @@ export default function CaptionEditor() {
     <AppShell>
       <div className="flex flex-col h-full bg-[#0a0a0a] text-white">
         {/* Top bar */}
-        <div className="border-b border-gray-800 bg-[#0d0d0d] px-6 py-3 flex items-center gap-3 flex-shrink-0">
+        <div className="border-b border-gray-800 bg-[#0d0d0d] px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 flex-shrink-0">
           <button
             onClick={() => navigate("/dashboard")}
             className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors"
@@ -223,10 +223,10 @@ export default function CaptionEditor() {
         </div>
 
         {/* Two-column body */}
-        <div className="flex-1 overflow-hidden flex">
+        <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row">
 
           {/* ── Left column: captions ── */}
-          <div className="flex-1 min-w-0 overflow-y-auto px-8 py-8">
+          <div className="lg:flex-1 min-w-0 lg:overflow-y-auto px-4 sm:px-8 py-6 sm:py-8">
             <div className="max-w-2xl mx-auto">
 
               {/* Heading */}
@@ -323,7 +323,7 @@ export default function CaptionEditor() {
           </div>
 
           {/* ── Right column: video style presets ── */}
-          <div className="w-72 flex-shrink-0 border-l border-gray-800 overflow-y-auto">
+          <div className="order-first lg:order-none w-full lg:w-72 flex-shrink-0 border-b lg:border-b-0 lg:border-l border-gray-800 lg:overflow-y-auto">
             <div className="p-5">
 
               <div className="mb-5">

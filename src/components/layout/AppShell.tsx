@@ -24,37 +24,24 @@ const C = {
 const mono = '"Geist Mono", "Fira Mono", monospace';
 const sans = '"Geist", system-ui, sans-serif';
 
-const navItems = [
-  {
-    label: "Library",
-    clickable: true,
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-      </svg>
-    ),
-  },
-  {
-    label: "Assets",
-    clickable: false,
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
-      </svg>
-    ),
-  },
-  {
-    label: "Analytics",
-    clickable: false,
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
-        <line x1="6" y1="20" x2="6" y2="14"/>
-      </svg>
-    ),
-  },
-];
+const libraryIcon = (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+);
+
+const logoMark = (
+  <div style={{
+    width: 32, height: 32, background: C.accent, borderRadius: 9,
+    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    boxShadow: "0 0 16px oklch(72% 0.17 280 / 0.45)",
+  }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill={C.bg}>
+      <polygon points="6,3 20,12 6,21"/>
+    </svg>
+  </div>
+);
 
 export default function AppShell({ children, activePage }: AppShellProps) {
   const navigate = useNavigate();
@@ -62,6 +49,16 @@ export default function AppShell({ children, activePage }: AppShellProps) {
   const [credits, setCredits] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  // Phones/tablets: the sidebar is a slide-out drawer (see .shell-* CSS below)
+  const [menuOpen, setMenuOpen] = useState(false);
+  const go = (path: string) => { setMenuOpen(false); navigate(path); };
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!user) return;
@@ -91,13 +88,26 @@ export default function AppShell({ children, activePage }: AppShellProps) {
       : C.accent;
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.fg, fontFamily: sans, overflow: "hidden" }}>
+    <div className="shell-root" style={{ background: C.bg, color: C.fg, fontFamily: sans, overflow: "hidden" }}>
       <style>{`
         @keyframes shell-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
         .shell-new-btn:hover { box-shadow: 0 6px 24px oklch(72% 0.17 280 / 0.5) !important; transform: translateY(-1px); }
         .shell-nav-item:hover { background: oklch(100% 0 0 / 0.04) !important; }
         .shell-bottom-item:hover { background: oklch(100% 0 0 / 0.05) !important; }
         .shell-upgrade-btn:hover { background: oklch(72% 0.17 280 / 0.08) !important; border-color: oklch(72% 0.17 280 / 0.4) !important; }
+        .shell-root { display: flex; height: 100vh; height: 100dvh; }
+        .shell-sidebar { position: relative; width: 260px; flex-shrink: 0; }
+        .shell-topbar, .shell-backdrop { display: none; }
+        @media (max-width: 899px) {
+          .shell-root { flex-direction: column; }
+          .shell-topbar { display: flex; }
+          .shell-sidebar {
+            position: fixed; top: 0; bottom: 0; left: 0; z-index: 60;
+            width: min(300px, 86vw); transform: translateX(-100%); transition: transform 0.22s ease;
+          }
+          .shell-sidebar.open { transform: none; box-shadow: 0 0 40px oklch(0% 0 0 / 0.6); }
+          .shell-backdrop.open { display: block; position: fixed; inset: 0; background: oklch(0% 0 0 / 0.55); z-index: 55; }
+        }
         .shell-sidebar::before {
           content: ''; position: absolute; top: 0; left: 0; right: 0; height: 200px;
           background: radial-gradient(ellipse at top left, oklch(72% 0.17 280 / 0.07) 0%, transparent 70%);
@@ -105,27 +115,60 @@ export default function AppShell({ children, activePage }: AppShellProps) {
         }
       `}</style>
 
-      {/* ── Sidebar ── */}
+      {/* ── Mobile top bar (hidden on desktop) ── */}
+      <header className="shell-topbar" style={{
+        alignItems: "center", justifyContent: "space-between", gap: 12, flexShrink: 0,
+        height: 56, padding: "0 12px", background: C.sidebar, borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+            style={{ display: "flex", padding: 8, background: "none", border: "none", color: C.fg, cursor: "pointer", borderRadius: 8 }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+          <button type="button" onClick={() => go("/dashboard")} aria-label="ClipFrom — Library"
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            {logoMark}
+            <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.02em", color: C.fg }}>ClipFrom</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => go("/")}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+            background: C.accent, border: "none", borderRadius: 9,
+            fontSize: 14, fontWeight: 600, color: C.bg, cursor: "pointer", fontFamily: sans,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New
+        </button>
+      </header>
+      <div className={`shell-backdrop${menuOpen ? " open" : ""}`} onClick={() => setMenuOpen(false)} aria-hidden="true" />
+
+      {/* ── Sidebar (drawer on small screens) ── */}
       <aside
-        className="shell-sidebar"
+        className={`shell-sidebar${menuOpen ? " open" : ""}`}
+        aria-label="Main navigation"
         style={{
-          width: 260, flexShrink: 0, display: "flex", flexDirection: "column",
+          display: "flex", flexDirection: "column",
           background: C.sidebar, borderRight: `1px solid ${C.border}`,
-          position: "relative", overflow: "hidden",
+          overflow: "hidden",
         }}
       >
         {/* Logo */}
         <div style={{ padding: "22px 18px 16px", borderBottom: `1px solid ${C.border}`, position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <div style={{
-              width: 32, height: 32, background: C.accent, borderRadius: 9,
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              boxShadow: "0 0 16px oklch(72% 0.17 280 / 0.45)",
-            }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill={C.bg}>
-                <polygon points="6,3 20,12 6,21"/>
-              </svg>
-            </div>
+            {logoMark}
             <span style={{ fontWeight: 700, fontSize: 19, letterSpacing: "-0.02em", color: C.fg }}>ClipFrom</span>
           </div>
           <div style={{
@@ -149,7 +192,7 @@ export default function AppShell({ children, activePage }: AppShellProps) {
         <div style={{ padding: "12px 14px", position: "relative", zIndex: 1 }}>
           <button
             className="shell-new-btn"
-            onClick={() => navigate("/")}
+            onClick={() => go("/")}
             style={{
               width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
               padding: "10px 0", background: C.accent, border: "none", borderRadius: 10,
@@ -167,49 +210,28 @@ export default function AppShell({ children, activePage }: AppShellProps) {
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: "6px 12px", display: "flex", flexDirection: "column", gap: 3, overflowY: "auto", position: "relative", zIndex: 1 }}>
-          {navItems.map((item) => {
-            const isActive = activePage === item.label;
-            if (item.clickable) {
-              return (
-                <button
-                  key={item.label}
-                  className={!isActive ? "shell-nav-item" : ""}
-                  onClick={() => navigate("/dashboard")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 11,
-                    padding: "10px 12px", borderRadius: 10, width: "100%", textAlign: "left",
-                    border: `1px solid ${isActive ? "oklch(72% 0.17 280 / 0.2)" : "transparent"}`,
-                    background: isActive ? C.accentSubtle : "none",
-                    cursor: "pointer", fontFamily: sans, transition: "all 0.12s",
-                  }}
-                >
-                  <span style={{ color: isActive ? C.accent : C.fgMuted, flexShrink: 0 }}>{item.icon}</span>
-                  <span style={{ fontSize: 15, fontWeight: isActive ? 500 : 400, color: isActive ? C.accent : C.fgMuted }}>
-                    {item.label}
-                  </span>
-                </button>
-              );
-            }
+          {(() => {
+            const isActive = activePage === "Library";
             return (
-              <div
-                key={item.label}
+              <button
+                className={!isActive ? "shell-nav-item" : ""}
+                onClick={() => go("/dashboard")}
+                aria-current={isActive ? "page" : undefined}
                 style={{
                   display: "flex", alignItems: "center", gap: 11,
-                  padding: "10px 12px", borderRadius: 10,
-                  border: "1px solid transparent",
-                  opacity: 0.72, cursor: "not-allowed", userSelect: "none",
+                  padding: "10px 12px", borderRadius: 10, width: "100%", textAlign: "left",
+                  border: `1px solid ${isActive ? "oklch(72% 0.17 280 / 0.2)" : "transparent"}`,
+                  background: isActive ? C.accentSubtle : "none",
+                  cursor: "pointer", fontFamily: sans, transition: "all 0.12s",
                 }}
               >
-                <span style={{ color: C.fgMuted, flexShrink: 0 }}>{item.icon}</span>
-                <span style={{ fontSize: 15, color: C.fgMuted }}>{item.label}</span>
-                <span style={{
-                  marginLeft: "auto", fontFamily: mono, fontSize: 10, color: C.fgDim,
-                  background: "oklch(100% 0 0 / 0.05)", border: "1px solid oklch(100% 0 0 / 0.08)",
-                  borderRadius: 4, padding: "2px 6px", letterSpacing: "0.04em", textTransform: "uppercase",
-                }}>soon</span>
-              </div>
+                <span style={{ color: isActive ? C.accent : C.fgMuted, flexShrink: 0 }}>{libraryIcon}</span>
+                <span style={{ fontSize: 15, fontWeight: isActive ? 500 : 400, color: isActive ? C.accent : C.fgMuted }}>
+                  Library
+                </span>
+              </button>
             );
-          })}
+          })()}
         </nav>
 
         {/* Bottom */}
@@ -260,7 +282,7 @@ export default function AppShell({ children, activePage }: AppShellProps) {
                   )}
                   <button
                     className="shell-upgrade-btn"
-                    onClick={() => setShowUpgrade(true)}
+                    onClick={() => { setMenuOpen(false); setShowUpgrade(true); }}
                     style={{
                       width: "100%", padding: "8px 0", background: credits === 0 ? C.accent : "transparent",
                       border: `1px solid ${credits === 0 ? "transparent" : C.accentBorder}`,
@@ -280,7 +302,7 @@ export default function AppShell({ children, activePage }: AppShellProps) {
           {isAdmin && (
             <button
               className={activePage !== "Admin" ? "shell-bottom-item" : ""}
-              onClick={() => navigate("/admin")}
+              onClick={() => go("/admin")}
               style={{
                 display: "flex", alignItems: "center", gap: 11, padding: "9px 10px",
                 borderRadius: 9, width: "100%", textAlign: "left", border: "none",
@@ -301,7 +323,7 @@ export default function AppShell({ children, activePage }: AppShellProps) {
           {/* Settings */}
           <button
             className={activePage !== "Settings" ? "shell-bottom-item" : ""}
-            onClick={() => navigate("/settings")}
+            onClick={() => go("/settings")}
             style={{
               display: "flex", alignItems: "center", gap: 11, padding: "9px 10px",
               borderRadius: 9, width: "100%", textAlign: "left", border: "none",
@@ -318,17 +340,6 @@ export default function AppShell({ children, activePage }: AppShellProps) {
               Settings
             </span>
           </button>
-
-          {/* Help (disabled) */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 11, padding: "9px 10px",
-            borderRadius: 9, opacity: 0.4, cursor: "not-allowed", userSelect: "none",
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ color: C.fgMuted, flexShrink: 0 }}>
-              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <span style={{ fontSize: 15, color: C.fgMuted }}>Help</span>
-          </div>
 
           {/* Logout */}
           <button
@@ -351,7 +362,7 @@ export default function AppShell({ children, activePage }: AppShellProps) {
       </aside>
 
       {/* ── Main content ── */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <main style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {children}
       </main>
 

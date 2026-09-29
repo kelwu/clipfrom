@@ -475,7 +475,7 @@ export default function VideoResults() {
 
     return (
       <AppShell>
-        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -611,7 +611,7 @@ export default function VideoResults() {
     return (
       <AppShell>
         {/* Top bar */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -626,7 +626,7 @@ export default function VideoResults() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto flex gap-5 p-6">
+        <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row gap-5 p-4 sm:p-6">
           {/* ── Main content ── */}
           <div className="flex-1 min-w-0 space-y-5">
             {/* Header */}
@@ -694,7 +694,7 @@ export default function VideoResults() {
 
             {/* Source + Script cards */}
             {sourceMode !== "video" && (content || firstCaption) && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-500">
@@ -738,7 +738,7 @@ export default function VideoResults() {
           </div>
 
           {/* ── Process Observability sidebar ── */}
-          <div className="w-64 flex-shrink-0">
+          <div className="w-full lg:w-64 flex-shrink-0">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sticky top-0">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Progress</h3>
               <div className="space-y-1">
@@ -789,7 +789,7 @@ export default function VideoResults() {
   return (
     <AppShell>
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/dashboard")} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -854,10 +854,10 @@ export default function VideoResults() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto flex">
+      <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row">
         {/* ── Script (articles only) ── */}
         {sourceMode !== "video" && displayCaptions.length > 0 && (
-        <div className="w-72 flex-shrink-0 border-r border-gray-800 overflow-y-auto">
+        <div className="order-2 lg:order-none w-full lg:w-72 flex-shrink-0 border-t lg:border-t-0 lg:border-r border-gray-800 lg:overflow-y-auto">
           <div className="px-4 py-3 border-b border-gray-800">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Script</h3>
             <p className="text-[10px] text-gray-600 mt-0.5">One line per clip</p>
@@ -874,7 +874,7 @@ export default function VideoResults() {
         )}
 
         {/* ── Center: video player ── */}
-        <div className="flex-1 flex flex-col items-center justify-start py-8 px-6 overflow-y-auto">
+        <div className="order-1 lg:order-none flex-1 flex flex-col items-center justify-start py-6 sm:py-8 px-4 sm:px-6 lg:overflow-y-auto">
           <div className="w-full max-w-xs space-y-5">
             {/* Video */}
             <div className="aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl">
@@ -1010,7 +1010,7 @@ export default function VideoResults() {
         </div>
 
         {/* ── Right panel ── */}
-        <div className="w-56 flex-shrink-0 border-l border-gray-800 p-4 space-y-3 overflow-y-auto">
+        <div className="order-3 lg:order-none w-full lg:w-56 flex-shrink-0 border-t lg:border-t-0 lg:border-l border-gray-800 p-4 space-y-3 lg:overflow-y-auto">
 
           {/* Video details — real values only */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

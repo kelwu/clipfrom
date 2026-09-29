@@ -263,6 +263,10 @@ export default function VideoStyle() {
 
           {/* Header */}
           <div style={{ marginBottom: 32 }}>
+            <button type="button" onClick={() => navigate("/dashboard")} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", padding: 0, marginBottom: 20, color: C.fgMuted, fontSize: 13, cursor: "pointer" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+              Library
+            </button>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <div style={{ width: 8, height: 8, background: C.green, borderRadius: "50%", boxShadow: `0 0 8px ${C.green}` }} />
               <span style={{ color: C.green, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
@@ -270,7 +274,7 @@ export default function VideoStyle() {
               </span>
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em" }}>
-              Customise your video
+              Customize your video
             </h1>
             <p style={{ color: C.fgDim, fontSize: 14, margin: 0, lineHeight: 1.5 }}>
               {wordCount > 0 ? `${wordCount} words transcribed · ` : ""}Preview updates live as you adjust settings.

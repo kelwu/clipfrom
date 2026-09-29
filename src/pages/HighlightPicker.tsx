@@ -213,7 +213,11 @@ export default function HighlightPicker() {
 
           {/* Header */}
           <div>
-            <h1 className="text-2xl font-bold text-white mb-1">Your highlights</h1>
+            <button type="button" onClick={() => navigate("/dashboard")} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", padding: 0, marginBottom: 20, color: C.fgMuted, fontSize: 13, cursor: "pointer" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+              Library
+            </button>
+            <h1 className="text-2xl font-bold text-white mb-1">Pick your highlights</h1>
             <p className="text-sm" style={{ color: C.fgMuted }}>
               AI picked {segments.length} moments from your video. Remove any you don't want, then generate.
             </p>

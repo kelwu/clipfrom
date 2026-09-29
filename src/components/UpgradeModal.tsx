@@ -87,7 +87,7 @@ export default function UpgradeModal({ onClose }: Props) {
       style={{ background: "oklch(10% 0.015 250 / 0.85)", backdropFilter: "blur(8px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-2xl overflow-hidden relative">
+      <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-800 flex items-start justify-between">
           <div>
@@ -102,7 +102,7 @@ export default function UpgradeModal({ onClose }: Props) {
         </div>
 
         {/* Plans */}
-        <div className="p-6 grid grid-cols-3 gap-3">
+        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {PLANS.map((plan) => (
             <div
               key={plan.id}

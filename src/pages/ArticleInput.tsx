@@ -564,20 +564,17 @@ const ArticleInput = () => {
             <div className="cf-nav-links">
               <button onClick={() => navigate("/features")} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0, transition: "color 0.15s" }}
                 onMouseEnter={e => (e.currentTarget.style.color = C.fg)} onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>Features</button>
-              {["Showcase", "Pricing"].map(l => (
-                <span key={l} style={{ color: C.fgDim, fontSize: 14, opacity: 0.5, cursor: "not-allowed" }}>{l}</span>
-              ))}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               {user ? (
-                <button onClick={() => navigate("/dashboard")} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0 }}>Dashboard</button>
+                <button onClick={() => navigate("/dashboard")} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0 }}>Library</button>
               ) : (
                 <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0, transition: "color 0.15s" }}
                   onMouseEnter={e => (e.currentTarget.style.color = C.fg)} onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>Login</button>
               )}
               <button onClick={() => user ? heroRef.current?.scrollIntoView({ behavior: "smooth" }) : navigate("/login")}
                 style={{ padding: "7px 18px", background: C.accent, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, color: "oklch(14% 0.015 250)", cursor: "pointer" }}>
-                Get Started
+                {user ? "New video" : "Get Started"}
               </button>
             </div>
           </div>

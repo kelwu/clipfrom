@@ -257,7 +257,7 @@ function ProjectCard({ project, health, onOpen, onRetry, retrying, onDelete, del
         </p>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <span style={{ fontFamily: mono, fontSize: 11, color: C.fgMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {MODE_LABEL[projectMode(project)]} · {sourceLabel(project)}
+            {projectMode(project) === "article" ? sourceLabel(project) : MODE_LABEL[projectMode(project)]}
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <span style={{ fontFamily: mono, fontSize: 11, color: C.fgDim }}>{timeAgo(project.created_at)}</span>

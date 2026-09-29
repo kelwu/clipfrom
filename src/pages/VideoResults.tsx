@@ -4,6 +4,22 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
+import { ESTIMATES } from "@/lib/estimates";
+import { isFailedStatus, isRenderingStatus } from "@/lib/status";
+
+interface RenderParams {
+  captionStyle?: string;
+  transitionStyle?: string;
+  videoSource?: string;
+  brollLayout?: string;
+}
+
+const BROLL_LAYOUT_LABELS: Record<string, string> = {
+  auto: "Auto (AI)", fullscreen: "Full screen", "top-three-quarters": "Top ¾", "top-two-thirds": "Top two-thirds",
+  "top-half": "Top half", "top-third": "Top third", "bottom-third": "Bottom third", corner: "Corner PiP", floating: "Floating",
+};
+
+const formatDuration = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;
 
 interface ResultData {
   id?: string | null;
@@ -18,6 +34,8 @@ interface ResultData {
   video_url_4?: string | null;
   video_url_5?: string | null;
   status?: string | null;
+  render_params?: RenderParams | null;
+  broll_count?: number | null;
 }
 
 const Spinner = ({ size = 14 }: { size?: number }) => (
@@ -46,10 +64,15 @@ export default function VideoResults() {
   const location = useLocation();
   const navigate = useNavigate();
   const { projectId: projectIdParam } = useParams();
+  const { session, user } = useAuth();
 
   const [result, setResult] = useState<ResultData>({});
+  const [loaded, setLoaded] = useState(false);
+  const [dbMode, setDbMode] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [editingCaption, setEditingCaption] = useState(false);
-  const [editedCaption, setEditedCaption] = useState("");
+  // null = not edited; the outro is appended separately, never part of this text
+  const [editedCaption, setEditedCaption] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState(false);
@@ -66,16 +89,17 @@ export default function VideoResults() {
   // Non-null once the render fails ("failed") or the client-side poll gives up ("timeout").
   const [renderProblem, setRenderProblem] = useState<null | "failed" | "timeout">(null);
 
-  const { session, user } = useAuth();
-
   const projectId = location.state?.projectId || projectIdParam;
-  const userEmail = location.state?.userEmail;
+  const userEmail: string | undefined = location.state?.userEmail ?? user?.email ?? undefined;
   const content: string = location.state?.content || "";
   const approvedCaptions: { id: number; text: string }[] = location.state?.captions || [];
-  const captionStyle: string = location.state?.captionStyle ?? "pill";
-  const transitionStyle: string = location.state?.transitionStyle ?? "cut";
-  const videoSource: string = location.state?.videoSource ?? "ai";
-  const sourceMode: string = location.state?.sourceMode ?? "article";
+  // Saved settings win over navigation state, which is missing when the page is opened from the Library or a link
+  const rp: RenderParams = result.render_params ?? {};
+  const captionStyle: string = rp.captionStyle ?? location.state?.captionStyle ?? "pill";
+  const transitionStyle: string = rp.transitionStyle ?? location.state?.transitionStyle ?? "cut";
+  const videoSource: string | undefined = rp.videoSource ?? location.state?.videoSource;
+  // Navigation state knows the mode on the way in; otherwise it's loaded from the project (null until then)
+  const sourceMode: string | null = location.state?.sourceMode ?? dbMode;
   const showHookCard: boolean = location.state?.showHookCard ?? false;
   const captionFont: string | undefined = location.state?.captionFont;
   const hookText: string | undefined = location.state?.hookText;
@@ -86,48 +110,55 @@ export default function VideoResults() {
   const totalClips = clips.length;
   const videoUrlsFilled = clips.filter(Boolean).length;
   const stitchedReady = !!result.stitched_video_url;
-  const baseCaption = editedCaption || result.description || result.final_caption || "";
-  const instagramCaption = captionOutro ? `${baseCaption}\n\n${captionOutro}` : baseCaption;
+  const generatedCaption = result.description || result.final_caption || "";
+  const baseCaption = editedCaption ?? generatedCaption;
+  const instagramCaption = captionOutro && baseCaption ? `${baseCaption}\n\n${captionOutro}` : baseCaption;
   const charCount = instagramCaption.length;
 
-  // Process Observability: derive step states from DB status
+  // Progress steps, driven by the statuses the pipelines actually write
   const status = result.status || "";
+  const rendering = isRenderingStatus(status);
   const obsSteps = sourceMode === "video"
     ? [
-        { label: "Transcript Ready", sub: "Word-level timestamps extracted", done: true, active: false },
+        { label: "Transcript ready", sub: "Word-level timing extracted", done: true, active: false },
         {
-          label: "B-Roll",
-          sub: "Sourcing stock clips per segment",
+          label: "AI edit & b-roll",
+          sub: "Choosing moments, layouts and footage",
           done: ["videos_ready", "remotion_rendering", "complete"].includes(status),
           active: status === "generating_broll",
         },
         {
           label: "Rendering",
-          sub: "Compositing captions + B-roll",
+          sub: "Captions, zooms and b-roll",
           done: status === "complete",
           active: ["videos_ready", "remotion_rendering"].includes(status),
         },
       ]
     : [
-        { label: "Scraping Article", sub: "Fetching and parsing source content", done: true, active: false },
-        { label: "The Writer", sub: "Scripting captions from key insights", done: true, active: false },
+        { label: "Script written", sub: "From the article's key points", done: true, active: false },
         {
-          label: "The Director",
-          sub: "Generating clips",
-          done: ["kling_tasks_done", "videos_ready", "complete"].includes(status),
-          active: ["generating_videos", "kling_tasks_created"].includes(status),
+          label: "Voiceover",
+          sub: "Recording the narration",
+          done: ["ai_tasks_created", "ai_tasks_done", "videos_ready"].includes(status) || rendering,
+          active: status === "generating_videos",
         },
         {
-          label: "Audio Synthesis",
-          sub: "Generating voiceover",
-          done: videoUrlsFilled > 0 || ["videos_ready", "complete"].includes(status),
-          active: status === "kling_tasks_done",
+          label: "Clips",
+          sub: "AI and stock footage for each line",
+          done: ["ai_tasks_done", "videos_ready"].includes(status) || rendering,
+          active: ["generating_videos", "ai_tasks_created"].includes(status),
         },
         {
-          label: "Rendering",
-          sub: "Stitching clips, voiceover & captions",
+          label: "Your review",
+          sub: "Swap clips or the voice, then render",
+          done: rendering,
+          active: status === "ai_tasks_done" || status === "videos_ready",
+        },
+        {
+          label: "Final render",
+          sub: "Stitching clips, voiceover and captions",
           done: status === "complete",
-          active: status === "videos_ready",
+          active: rendering,
         },
       ];
 
@@ -135,19 +166,32 @@ export default function VideoResults() {
     ? approvedCaptions.map((c) => c.text)
     : Array.isArray(result.caption_options) ? result.caption_options : [];
 
-  // Derive a rough progress % for the processing engine header
+  // Rough progress % for the header — tied to real pipeline stages, not a timer
   const processingProgress = stitchedReady ? 100
-    : ["videos_ready", "remotion_rendering"].includes(status) ? 90
-    : status === "kling_tasks_done" ? 70
-    : status === "kling_tasks_created" ? 50
-    : status === "generating_videos" ? 30
-    : videoUrlsFilled > 0 ? 40 + videoUrlsFilled * 8
-    : 20;
+    : sourceMode === "video"
+      ? (status === "remotion_rendering" ? 80 : status === "videos_ready" ? 60 : status === "generating_broll" ? 35 : 15)
+      : (rendering ? 90
+        : status === "videos_ready" ? 100
+        : status === "ai_tasks_done" ? 85
+        : status === "ai_tasks_created" ? 55
+        : status === "generating_videos" ? 30
+        : 10);
+  const estimate = sourceMode === "video" ? ESTIMATES.talkingHeadRender : rendering ? ESTIMATES.articleRender : ESTIMATES.articleClips;
 
   const testMode = import.meta.env.VITE_TEST_MODE === "true";
 
   useEffect(() => {
-    if (!projectId && !testMode) { navigate("/"); return; }
+    if (location.state?.sourceMode || !projectId) return;
+    supabase.from("projects").select("source_mode").eq("id", projectId).maybeSingle()
+      .then(({ data }) => {
+        const m = data?.source_mode;
+        setDbMode(m === "video" || m === "long_video" ? m : "article");
+      });
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId && !testMode) { navigate("/dashboard"); return; }
+    if (!sourceMode && !testMode) return; // wait until the mode is known
 
     if (testMode) {
       setResult({
@@ -184,11 +228,15 @@ export default function VideoResults() {
 
         const { data: gen } = await supabase
           .from("ai_generations").select("status").eq("project_id", projectId).maybeSingle();
-        if (gen?.status === "complete") {
+        setLoaded(true);
+        if (gen?.status === "complete" || isFailedStatus(gen?.status)) {
           clearInterval(pollingRef.current!);
-          toast.success("Your shorts are ready!");
+          if (isFailedStatus(gen?.status)) setRenderProblem("failed");
+          else if (pollingRef.current && !firstPoll) toast.success("Your shorts are ready!");
         }
+        firstPoll = false;
       };
+      let firstPoll = true;
       pollSegments();
       pollingRef.current = setInterval(pollSegments, 8000);
       return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
@@ -263,14 +311,13 @@ export default function VideoResults() {
       try {
         const { data } = await supabase
           .from("ai_generations")
-          .select("id, stitched_video_url, caption_options, final_caption, description, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, status")
+          .select("id, stitched_video_url, caption_options, final_caption, description, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, status, render_params, broll_count")
           .eq("project_id", projectId).maybeSingle();
+        setLoaded(true);
         if (!data) return false;
         setResult(data);
         // Terminal failure — stop polling and surface it instead of spinning forever.
-        // Covers 'failed', 'kling_all_failed', and any *_error status (remotion_error, voiceover_error, …).
-        const st: string = data.status ?? "";
-        if (st === "failed" || st === "kling_all_failed" || st.endsWith("_error")) {
+        if (isFailedStatus(data.status)) {
           clearInterval(pollingRef.current!);
           setRenderProblem("failed");
           toast.error("This render didn't complete. You can try again from your library.");
@@ -312,7 +359,7 @@ export default function VideoResults() {
       }
     });
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [projectId, userEmail, navigate]);
+  }, [projectId, sourceMode, navigate]);
 
   const handlePostToInstagram = async () => {
     if (!result.stitched_video_url) return;
@@ -410,6 +457,17 @@ export default function VideoResults() {
   const contentPreview = content.length > 200 ? content.slice(0, 200) + "…" : content;
   const firstCaption = displayCaptions[0] || "";
 
+  // ── Neutral loading state until we know what we're showing ─────────────────
+  if (!testMode && (!sourceMode || !loaded)) {
+    return (
+      <AppShell>
+        <div className="flex-1 flex items-center justify-center gap-3 text-gray-400 text-sm">
+          <Spinner size={16} /> Loading your video…
+        </div>
+      </AppShell>
+    );
+  }
+
   // ── Long video: multi-segment results ────────────────────────────────────────
   if (sourceMode === "long_video") {
     const allDone = videoSegments.length > 0 && videoSegments.every(s => s.status === "complete" || s.status === "error");
@@ -419,9 +477,9 @@ export default function VideoResults() {
       <AppShell>
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => { clearInterval(pollingRef.current!); navigate("/"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
+            <button onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-              Back
+              Library
             </button>
             <div className="h-4 w-px bg-gray-800" />
             <span className="text-sm font-medium text-white">Your Shorts</span>
@@ -463,6 +521,7 @@ export default function VideoResults() {
                     <div className="flex items-center gap-2">
                       {seg.status === "complete" && seg.output_url && (
                         <a href={seg.output_url} download target="_blank" rel="noreferrer"
+                          onClick={(e) => { e.preventDefault(); downloadFile(seg.output_url!, `clipfrom-short-${seg.segment_index + 1}.mp4`); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           Download
@@ -494,16 +553,22 @@ export default function VideoResults() {
                   {(seg.status === "rendering" || seg.status === "pending") && (
                     <div className="px-5 py-4 flex items-center gap-3 text-gray-500 text-sm">
                       <Spinner size={14} />
-                      {seg.status === "rendering" ? "Rendering with Remotion Lambda…" : "Queued"}
+                      {seg.status === "rendering" ? "Rendering…" : "Queued"}
                     </div>
                   )}
                 </div>
               ))
             )}
 
-            {!anyReady && !allDone && (
+            {renderProblem === "failed" && (
+              <p className="text-sm text-red-400">
+                This run didn't complete. Credits for failed runs are refunded automatically — you can try again from your Library.
+              </p>
+            )}
+
+            {!anyReady && !allDone && !renderProblem && (
               <p className="text-center text-xs text-gray-600 pt-2">
-                Each short takes ~3 minutes. We'll email you when they're done.
+                Each short takes {ESTIMATES.perHighlight}. We'll email you when they're done.
               </p>
             )}
           </div>
@@ -548,15 +613,15 @@ export default function VideoResults() {
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => { clearInterval(pollingRef.current!); navigate("/"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
+            <button onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-              Back
+              Library
             </button>
             <div className="h-4 w-px bg-gray-800" />
-            <span className="text-sm font-medium text-white">Processing Engine</span>
+            <span className="text-sm font-medium text-white">{sourceMode === "video" ? "Making your video" : rendering ? "Rendering" : "Making your clips"}</span>
             <span className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-0.5 text-[10px] text-amber-400 font-semibold uppercase tracking-wide">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-              AI CORE ACTIVE
+              In progress
             </span>
           </div>
         </div>
@@ -566,7 +631,7 @@ export default function VideoResults() {
           <div className="flex-1 min-w-0 space-y-5">
             {/* Header */}
             <div>
-              <h1 className="text-2xl font-bold mb-1">Processing Engine</h1>
+              <h1 className="text-2xl font-bold mb-1">{sourceMode === "video" ? "Making your video" : rendering ? "Rendering your video" : "Making your clips"}</h1>
               {content && (
                 <p className="text-gray-400 text-sm">
                   Converting <span className="text-white">"{contentPreview.slice(0, 60)}{contentPreview.length > 60 ? "…" : ""}"</span> into a cinematic short-form video
@@ -579,8 +644,8 @@ export default function VideoResults() {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-3xl font-bold text-white">{processingProgress}%</span>
                 <div className="text-right">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Est. time remaining</p>
-                  <p className="text-sm font-semibold text-gray-300">5–10 min</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Usually takes</p>
+                  <p className="text-sm font-semibold text-gray-300">{estimate}</p>
                 </div>
               </div>
               <div className="w-full bg-gray-800 rounded-full h-2">
@@ -591,7 +656,8 @@ export default function VideoResults() {
               </div>
             </div>
 
-            {/* Clip thumbnails — compact film strip */}
+            {/* Clip thumbnails — compact film strip (articles only; uploads have no clips) */}
+            {sourceMode !== "video" && !rendering && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clip Generation</span>
@@ -624,7 +690,10 @@ export default function VideoResults() {
               </div>
             </div>
 
+            )}
+
             {/* Source + Script cards */}
+            {sourceMode !== "video" && (content || firstCaption) && (
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -649,6 +718,7 @@ export default function VideoResults() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Email notification */}
             {userEmail && (
@@ -657,8 +727,11 @@ export default function VideoResults() {
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                 </svg>
                 <div>
-                  <p className="text-sm text-gray-200">This usually takes <span className="text-white font-medium">5–10 minutes</span>.</p>
-                  <p className="text-xs text-gray-400 mt-0.5">We'll email <span className="text-gray-300">{userEmail}</span> when your video is ready — you can safely leave this page.</p>
+                  <p className="text-sm text-gray-200">This usually takes <span className="text-white font-medium">{estimate}</span>. You can safely leave this page.</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    We'll email <span className="text-gray-300">{userEmail}</span>{" "}
+                    {sourceMode === "video" || rendering ? "when your video is ready." : "when your clips are ready to review."}
+                  </p>
                 </div>
               </div>
             )}
@@ -667,7 +740,7 @@ export default function VideoResults() {
           {/* ── Process Observability sidebar ── */}
           <div className="w-64 flex-shrink-0">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 sticky top-0">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Process Observability</h3>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Progress</h3>
               <div className="space-y-1">
                 {obsSteps.map((step, i) => (
                   <div key={i} className="flex gap-3 py-2.5">
@@ -718,15 +791,15 @@ export default function VideoResults() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
+          <button onClick={() => navigate("/dashboard")} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-            Dashboard
+            Library
           </button>
           <div className="h-4 w-px bg-gray-800" />
-          <span className="text-sm font-medium text-white">Preview Canvas</span>
+          <span className="text-sm font-medium text-white">Your video</span>
           <span className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5 text-[10px] text-emerald-400 font-semibold uppercase tracking-wide">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            AI Video Ready
+            Ready
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -769,40 +842,36 @@ export default function VideoResults() {
               )}
             </button>
           )}
-          <a
-            href={result.stitched_video_url!}
-            download
-            onClick={(e) => { e.preventDefault(); downloadFile(result.stitched_video_url!, `clipfrom-${projectId}.mp4`); }}
-            className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-semibold transition-colors"
-          >
-            Export All
-          </a>
+          {sourceMode === "video" && (
+            <button
+              onClick={() => navigate(`/video-style/${projectId}`)}
+              className="px-4 py-1.5 border border-gray-700 hover:border-gray-500 rounded-lg text-sm font-semibold text-gray-200 transition-colors"
+              title="Change captions or b-roll and render again (1 credit)"
+            >
+              Edit &amp; re-render
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto flex">
-        {/* ── Scene segments sidebar ── */}
+        {/* ── Script (articles only) ── */}
+        {sourceMode !== "video" && displayCaptions.length > 0 && (
         <div className="w-72 flex-shrink-0 border-r border-gray-800 overflow-y-auto">
           <div className="px-4 py-3 border-b border-gray-800">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Scene Segments</h3>
-            <p className="text-[10px] text-gray-600 mt-0.5">AI Value Ready</p>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Script</h3>
+            <p className="text-[10px] text-gray-600 mt-0.5">One line per clip</p>
           </div>
           <div className="divide-y divide-gray-800/60">
-            {displayCaptions.map((text, i) => {
-              const start = `00:${String(i * 5).padStart(2, "0")}`;
-              const end = `00:${String((i + 1) * 5).padStart(2, "0")}`;
-              return (
-                <div key={i} className="px-4 py-4 hover:bg-gray-900/40 transition-colors cursor-pointer">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] text-gray-600 font-medium uppercase tracking-wide">Segment {i + 1}</span>
-                    <span className="text-[10px] text-gray-600">{start} — {end}</span>
-                  </div>
-                  <p className="text-xs text-gray-300 leading-relaxed">{text}</p>
-                </div>
-              );
-            })}
+            {displayCaptions.map((text, i) => (
+              <div key={i} className="px-4 py-4">
+                <span className="block text-[10px] text-gray-600 font-medium uppercase tracking-wide mb-1.5">Clip {i + 1}</span>
+                <p className="text-xs text-gray-300 leading-relaxed">{text}</p>
+              </div>
+            ))}
           </div>
         </div>
+        )}
 
         {/* ── Center: video player ── */}
         <div className="flex-1 flex flex-col items-center justify-start py-8 px-6 overflow-y-auto">
@@ -815,6 +884,7 @@ export default function VideoResults() {
                 autoPlay
                 muted
                 playsInline
+                onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration)}
                 className="w-full h-full"
               />
             </div>
@@ -842,15 +912,19 @@ export default function VideoResults() {
                 <h3 className="font-semibold text-sm">Share on Instagram & TikTok</h3>
               </div>
               <div className="p-4">
-                {instagramCaption ? (
+                {instagramCaption || sourceMode === "video" || result.status === "complete" ? (
                   <>
-                    {editingCaption ? (
-                      <textarea
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 resize-none focus:outline-none focus:border-emerald-500 leading-relaxed"
-                        rows={8}
-                        value={editedCaption || instagramCaption}
-                        onChange={(e) => setEditedCaption(e.target.value)}
-                      />
+                    {editingCaption || !instagramCaption ? (
+                      <>
+                        <textarea
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-200 resize-none focus:outline-none focus:border-emerald-500 leading-relaxed"
+                          rows={8}
+                          placeholder="Write a caption for your post…"
+                          value={baseCaption}
+                          onChange={(e) => setEditedCaption(e.target.value)}
+                        />
+                        {captionOutro && <p className="text-[10px] text-gray-600 mt-1">Your caption outro is added automatically.</p>}
+                      </>
                     ) : (
                       <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{instagramCaption}</p>
                     )}
@@ -860,7 +934,7 @@ export default function VideoResults() {
                       </span>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => { setEditingCaption(!editingCaption); if (editingCaption && !editedCaption) setEditedCaption(""); }}
+                          onClick={() => setEditingCaption(!editingCaption)}
                           className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs font-medium transition-colors"
                         >
                           {editingCaption ? "Done" : "Edit"}
@@ -938,16 +1012,24 @@ export default function VideoResults() {
         {/* ── Right panel ── */}
         <div className="w-56 flex-shrink-0 border-l border-gray-800 p-4 space-y-3 overflow-y-auto">
 
-          {/* Video stats */}
+          {/* Video details — real values only */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-3">Video Details</span>
             <div className="space-y-2.5">
               {[
-                { label: "Duration", value: "~25 sec" },
-                { label: "Aspect Ratio", value: "9:16" },
-                { label: "Resolution", value: "1080p" },
-                { label: "Format", value: "MP4 H.264" },
-                { label: "Clips", value: `${totalClips} segments` },
+                { label: "Duration", value: videoDuration ? formatDuration(videoDuration) : "—" },
+                { label: "Format", value: "9:16 · 1080p MP4" },
+                { label: "Captions", value: captionStyle === "lower-third" ? "Lower third" : captionStyle === "none" ? "Off" : captionStyle.charAt(0).toUpperCase() + captionStyle.slice(1) },
+                ...(sourceMode === "video"
+                  ? [
+                      { label: "B-roll", value: BROLL_LAYOUT_LABELS[rp.brollLayout ?? "auto"] ?? "Auto (AI)" },
+                      ...(result.broll_count != null ? [{ label: "Cutaways", value: String(result.broll_count) }] : []),
+                    ]
+                  : [
+                      { label: "Clips", value: String(totalClips) },
+                      { label: "Transitions", value: transitionStyle.charAt(0).toUpperCase() + transitionStyle.slice(1) },
+                      ...(videoSource ? [{ label: "Footage", value: videoSource === "ai" ? "AI" : videoSource === "stock" ? "Stock" : "AI + stock" }] : []),
+                    ]),
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between">
                   <span className="text-[11px] text-gray-600">{label}</span>
@@ -957,46 +1039,15 @@ export default function VideoResults() {
             </div>
           </div>
 
-          {/* Caption style used */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-2">Caption Style</span>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-sm font-semibold text-white capitalize">
-                {captionStyle === "lower-third" ? "Lower Third" : captionStyle === "none" ? "Off" : captionStyle.charAt(0).toUpperCase() + captionStyle.slice(1)}
-              </span>
-            </div>
-          </div>
-
-          {/* Transition style used */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-2">Transitions</span>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-sm font-semibold text-white capitalize">{transitionStyle}</span>
-            </div>
-          </div>
-
-          {/* Video source used */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-2">Video Source</span>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-sm font-semibold text-white">
-                {videoSource === "ai" ? "AI Generated" : videoSource === "stock" ? "Stock Footage" : "Mix (AI + Stock)"}
-              </span>
-            </div>
-          </div>
-
           {/* Start over */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-2">Create Another</span>
-            <p className="text-[11px] text-gray-600 leading-relaxed mb-3">Turn a different article into a short-form video.</p>
+            <p className="text-[11px] text-gray-600 leading-relaxed mb-3">Start a new video from an article or your own footage.</p>
             <button
               onClick={() => navigate("/")}
               className="w-full py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs font-semibold text-gray-300 hover:text-white transition-colors"
             >
-              Start Over
+              New video
             </button>
           </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { ESTIMATES } from "@/lib/estimates";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
 
@@ -161,7 +162,7 @@ export default function HighlightPicker() {
   if (analyzing) {
     return (
       <AppShell>
-        <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4"
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-4"
           style={{ background: C.bg }}>
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
@@ -191,7 +192,7 @@ export default function HighlightPicker() {
   if (error) {
     return (
       <AppShell>
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4"
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 px-4"
           style={{ background: C.bg }}>
           <p className="text-red-400">{error}</p>
           <button
@@ -207,7 +208,7 @@ export default function HighlightPicker() {
 
   return (
     <AppShell>
-      <div className="min-h-screen px-4 py-10" style={{ background: C.bg }}>
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-10" style={{ background: C.bg }}>
         <div className="max-w-2xl mx-auto space-y-8">
 
           {/* Header */}
@@ -331,7 +332,7 @@ export default function HighlightPicker() {
           </button>
 
           <p className="text-center text-xs" style={{ color: C.fgMuted }}>
-            1 credit · each short renders in ~3 min · we'll email you when they're ready
+            1 credit · each short takes {ESTIMATES.perHighlight} · we'll email you when they're ready
           </p>
         </div>
       </div>

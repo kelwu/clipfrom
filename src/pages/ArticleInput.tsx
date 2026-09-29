@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import * as tus from "tus-js-client";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { ESTIMATES } from "@/lib/estimates";
 
 const LOG_LINES = [
   { text: "$ Initializing AI pipeline...", color: "text-gray-400" },
@@ -92,9 +93,8 @@ const TYPING_URLS = [
 ];
 
 const VIDEO_LOG_LINES = [
-  { text: "$ Uploading video to secure storage...", color: "text-gray-400" },
   { text: "✓ Upload complete", color: "text-emerald-400" },
-  { text: "✓ Video received by transcription engine", color: "text-emerald-400" },
+  { text: "› Sending video to transcription...", color: "text-gray-400" },
   { text: "› Analyzing speech patterns...", color: "text-amber-400" },
   { text: "› Extracting word-level timestamps...", color: "text-amber-400" },
   { text: "› Preparing caption overlay...", color: "text-amber-400" },
@@ -110,7 +110,8 @@ const ArticleInput = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [stage, setStage] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(180);
+  // Real upload progress (0–100) from the resumable upload; null when not uploading
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [visibleLines, setVisibleLines] = useState(0);
   const [typedUrl, setTypedUrl] = useState("");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -143,13 +144,22 @@ const ArticleInput = () => {
 
   useEffect(() => {
     if (!isLoading) return;
-    setProgress(0); setStage(0); setTimeRemaining(inputMode === "url" || inputMode === "text" ? 180 : 360); setVisibleLines(0);
+    setProgress(0); setStage(0); setVisibleLines(0);
     const p = setInterval(() => setProgress((v) => Math.min(v + 0.6, 95)), 1000);
     const s = setInterval(() => setStage((v) => (v + 1) % stages.length), 20000);
-    const t = setInterval(() => setTimeRemaining((v) => Math.max(v - 1, 0)), 1000);
-    const l = setInterval(() => setVisibleLines((v) => Math.min(v + 1, LOG_LINES.length)), 3000);
-    return () => { clearInterval(p); clearInterval(s); clearInterval(t); clearInterval(l); };
+    return () => { clearInterval(p); clearInterval(s); };
   }, [isLoading]);
+
+  // Log lines advance only once there's something true to say: for uploads, after the file is up.
+  const uploadDone = uploadPct === 100;
+  useEffect(() => {
+    if (!isLoading) return;
+    const isUpload = inputMode === "video" || inputMode === "long_video";
+    if (isUpload && !uploadDone) return;
+    const l = setInterval(() => setVisibleLines((v) => Math.min(v + 1, (isUpload ? VIDEO_LOG_LINES : LOG_LINES).length)), 3000);
+    setVisibleLines((v) => Math.max(v, 1));
+    return () => clearInterval(l);
+  }, [isLoading, uploadDone]);
 
   useEffect(() => () => { if (pollingRef.current) clearInterval(pollingRef.current); }, []);
 
@@ -299,6 +309,7 @@ const ArticleInput = () => {
         return;
       }
 
+      setUploadPct(0);
       setIsLoading(true);
       let projectId: string | null = null;
       let uploadedFilePath: string | null = null;
@@ -337,8 +348,9 @@ const ArticleInput = () => {
               cacheControl: "3600",
             },
             chunkSize: 6 * 1024 * 1024,
+            onProgress: (sent, total) => setUploadPct(total ? Math.min(99, Math.round((sent / total) * 100)) : 0),
             onError: (err) => reject(new Error(`Upload failed: ${err.message}`)),
-            onSuccess: () => resolve(),
+            onSuccess: () => { setUploadPct(100); resolve(); },
           });
           upload.start();
         });
@@ -445,7 +457,6 @@ const ArticleInput = () => {
     }
   };
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   /* ── Loading screen ── */
   if (isLoading) {
@@ -453,12 +464,29 @@ const ArticleInput = () => {
       <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center px-4 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 40% at 50% 50%, oklch(72% 0.17 280 / 0.08) 0%, transparent 70%)" }} />
         <div className="relative z-10 w-full max-w-lg text-center">
-          <div className="text-7xl font-bold tabular-nums mb-2">{Math.round(progress)}%</div>
-          <p className="text-gray-400 text-sm mb-1 h-5 transition-all">{stages[stage]}</p>
-          <p className="text-gray-600 text-xs mb-8">Estimated {formatTime(timeRemaining)} remaining</p>
-          <div className="w-full bg-gray-800 rounded-full h-1.5 mb-10 overflow-hidden">
-            <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${progress}%`, boxShadow: "0 0 12px oklch(72% 0.17 280 / 0.8), 0 0 24px oklch(72% 0.17 280 / 0.3)" }} />
-          </div>
+          {(() => {
+            const isUpload = inputMode === "video" || inputMode === "long_video";
+            const uploading = isUpload && !uploadDone;
+            const pct = uploading ? (uploadPct ?? 0) : progress;
+            return (
+              <>
+                <div className="text-7xl font-bold tabular-nums mb-2">{uploading ? `${pct}%` : Math.round(pct) + "%"}</div>
+                <p className="text-gray-400 text-sm mb-1 h-5 transition-all">
+                  {uploading ? "Uploading your video…" : isUpload ? "Transcribing your video…" : stages[stage]}
+                </p>
+                <p className="text-gray-600 text-xs mb-8">
+                  {uploading
+                    ? "Keep this tab open until the upload finishes."
+                    : isUpload
+                      ? `Usually ${ESTIMATES.transcription}. You can leave — it'll be waiting in your Library.`
+                      : "Usually under a minute."}
+                </p>
+                <div className="w-full bg-gray-800 rounded-full h-1.5 mb-10 overflow-hidden">
+                  <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-1000" style={{ width: `${pct}%`, boxShadow: "0 0 12px oklch(72% 0.17 280 / 0.8), 0 0 24px oklch(72% 0.17 280 / 0.3)" }} />
+                </div>
+              </>
+            );
+          })()}
           <div className="bg-[#0d0d0d] border border-gray-800 rounded-xl overflow-hidden text-left">
             <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-800 bg-[#111]">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" /><div className="w-3 h-3 rounded-full bg-[#febc2e]" /><div className="w-3 h-3 rounded-full bg-[#28c840]" />

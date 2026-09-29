@@ -18,7 +18,7 @@ interface Project {
     description: string | null;
     caption_options: string[] | null;
     source_mode: string | null;
-    render_params: { captionStyle?: string; transitionStyle?: string; captionFont?: string } | null;
+    render_params: { captionStyle?: string; transitionStyle?: string; captionFont?: string; videoSource?: string; showHookCard?: boolean; hookText?: string } | null;
   } | null;
 }
 
@@ -295,8 +295,11 @@ export default function Dashboard() {
           project_id: p.id,
           captionStyle: rp.captionStyle ?? "pill",
           transitionStyle: rp.transitionStyle ?? "cut",
-          videoSource: "stock",
+          // Reuse the footage the user chose (saved since Sep 2026); "ai" matches the default preset
+          videoSource: rp.videoSource ?? "ai",
           ...(rp.captionFont ? { captionFont: rp.captionFont } : {}),
+          ...(rp.showHookCard ? { showHookCard: true } : {}),
+          ...(rp.hookText ? { hookText: rp.hookText } : {}),
         }),
       });
       if (res.status === 402) { toast.error("You're out of credits. Upgrade to retry."); setRetrying(null); return; }

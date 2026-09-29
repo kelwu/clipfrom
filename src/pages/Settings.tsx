@@ -44,6 +44,7 @@ export default function Settings() {
   const billingPreview = new URLSearchParams(location.search).get("billing") === "preview";
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [outro, setOutro] = useState("");
   const [editingOutro, setEditingOutro] = useState(false);
@@ -122,10 +123,11 @@ export default function Settings() {
     if (!user) return;
     supabase
       .from("user_profiles")
-      .select("instagram_account_id, instagram_username, instagram_token_expires_at, caption_outro, credits_remaining, stripe_customer_id, stripe_subscription_id, preferred_voice_id, cloned_voice_id, cloned_voice_name")
+      .select("instagram_account_id, instagram_username, instagram_token_expires_at, caption_outro, credits_remaining, stripe_customer_id, stripe_subscription_id, preferred_voice_id, cloned_voice_id, cloned_voice_name, is_admin")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
+        setIsAdmin(!!data?.is_admin);
         setProfile(data ?? { instagram_account_id: null, instagram_username: null, instagram_token_expires_at: null, caption_outro: null, credits_remaining: null, stripe_customer_id: null, stripe_subscription_id: null, preferred_voice_id: null, cloned_voice_id: null, cloned_voice_name: null });
         setOutro(data?.caption_outro ?? "");
       });
@@ -507,7 +509,8 @@ export default function Settings() {
                     </button>
                   );
                 })()}
-                {VOICES.map(voice => {
+                {/* The founder's cloned voice (Kel) is only offered to admins */}
+                {VOICES.filter(v => v.id !== "KXOzch1bNSOicTxNAakl" || isAdmin).map(voice => {
                   const isSelected = profile.preferred_voice_id === voice.id;
                   const isPlaying = playingVoiceId === voice.id;
                   const hasPreview = !!voicePreviews[voice.id];

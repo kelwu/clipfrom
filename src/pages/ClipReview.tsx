@@ -4,12 +4,18 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
+import { ESTIMATES } from "@/lib/estimates";
+import { isFailedStatus, isRenderingStatus } from "@/lib/status";
 
-interface BrollCue { index: number; source: "kling" | "pexels" | null; url: string | null; }
+// requested/error are set by the pipeline when an AI (Kling) clip fell back to stock
+interface BrollCue { index: number; source: "kling" | "pexels" | null; requested?: "kling" | "pexels"; error?: string; url: string | null; }
+
+// The founder's cloned voice — only shown to admins.
+const OWNER_VOICE_ID = "KXOzch1bNSOicTxNAakl";
 
 // Color removed from VOICES — identity is name + tone, not a dot (P2 fix)
 const VOICES = [
-  { id: "KXOzch1bNSOicTxNAakl", name: "Kel",    tone: "Custom"          },
+  { id: OWNER_VOICE_ID, name: "Kel",    tone: "Custom"          },
   { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella",  tone: "Soft"            },
   { id: "pNInz6obpgDQGcFmaJgB", name: "Adam",   tone: "Authoritative"   },
 ] as const;
@@ -61,7 +67,6 @@ export default function ClipReview() {
 
   // P0: Two-stage render confirmation
   const [pendingRender, setPendingRender] = useState(false);
-  const pendingRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // P0: Clip-level error tracking
   const [failedClips, setFailedClips] = useState<Set<number>>(new Set());
@@ -78,6 +83,7 @@ export default function ClipReview() {
   const [currentVoiceId, setCurrentVoiceId] = useState<string | null>(null);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   const [clonedVoice, setClonedVoice] = useState<{ id: string; name: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [swappingVoice, setSwappingVoice] = useState(false);
   const [voiceSwapped, setVoiceSwapped] = useState(false);
   const [voicePreviews, setVoicePreviews] = useState<Record<string, string>>({});
@@ -105,6 +111,11 @@ export default function ClipReview() {
         if (Array.isArray(data.safe_caption_timings)) setCaptionTimings(data.safe_caption_timings);
         if (Array.isArray(data.word_timings)) setWordTimings(data.word_timings);
         if (data.render_params) setRenderParams(data.render_params);
+        // Coming back while the final render is running: show that, not the Render button again
+        if (isRenderingStatus(data.status)) {
+          setRendering(true);
+          pollRender();
+        }
         // P0: Mark null URLs as failed if generation is complete
         if (data.status === "complete") {
           const failed = new Set(
@@ -120,13 +131,14 @@ export default function ClipReview() {
     if (!user) return;
     supabase
       .from("user_profiles")
-      .select("preferred_voice_id, cloned_voice_id, cloned_voice_name")
+      .select("preferred_voice_id, cloned_voice_id, cloned_voice_name, is_admin")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
         setCurrentVoiceId(data.preferred_voice_id ?? null);
         setSelectedVoiceId(data.preferred_voice_id ?? null);
+        setIsAdmin(!!data.is_admin);
         if (data.cloned_voice_id) {
           setClonedVoice({ id: data.cloned_voice_id, name: data.cloned_voice_name ?? "My Clone" });
         }
@@ -254,6 +266,31 @@ export default function ClipReview() {
     }
   };
 
+  function pollRender() {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    let pollAttempts = 0;
+    pollingRef.current = setInterval(async () => {
+      pollAttempts++;
+      const { data } = await supabase
+        .from("ai_generations")
+        .select("status, stitched_video_url")
+        .eq("project_id", projectId!)
+        .maybeSingle();
+      if (data?.stitched_video_url) {
+        clearInterval(pollingRef.current!);
+        navigate(`/results/${projectId}`);
+      } else if (isFailedStatus(data?.status)) {
+        clearInterval(pollingRef.current!);
+        toast.error("Render failed — your credit was refunded. Please try again.");
+        setRendering(false);
+      } else if (pollAttempts >= 90) {
+        // Stop the spinner only; the render keeps going server-side and emails on completion.
+        clearInterval(pollingRef.current!);
+        toast.message("Still rendering — we'll email you when it's done. It'll also appear in your Library.");
+      }
+    }, 8000);
+  }
+
   const handleRender = async () => {
     if (!projectId || rendering) return;
     setRendering(true);
@@ -275,27 +312,7 @@ export default function ClipReview() {
         setRendering(false);
         return;
       }
-      let pollAttempts = 0;
-      pollingRef.current = setInterval(async () => {
-        pollAttempts++;
-        const { data } = await supabase
-          .from("ai_generations")
-          .select("status, stitched_video_url")
-          .eq("project_id", projectId!)
-          .maybeSingle();
-        if (data?.stitched_video_url) {
-          clearInterval(pollingRef.current!);
-          navigate(`/results/${projectId}`);
-        } else if (data?.status === "remotion_error") {
-          clearInterval(pollingRef.current!);
-          toast.error("Render failed — please try again");
-          setRendering(false);
-        } else if (pollAttempts >= 90) {
-          clearInterval(pollingRef.current!);
-          toast.error("Render is taking longer than expected. Check your email or try again.");
-          setRendering(false);
-        }
-      }, 8000);
+      pollRender();
     } catch {
       toast.error("Could not reach the render server");
       setRendering(false);
@@ -307,9 +324,7 @@ export default function ClipReview() {
     if (!allReady || rendering) return;
     if (!pendingRender) {
       setPendingRender(true);
-      pendingRenderTimerRef.current = setTimeout(() => setPendingRender(false), 3000);
     } else {
-      if (pendingRenderTimerRef.current) clearTimeout(pendingRenderTimerRef.current);
       setPendingRender(false);
       handleRender();
     }
@@ -317,10 +332,11 @@ export default function ClipReview() {
 
   useEffect(() => () => {
     if (pollingRef.current) clearInterval(pollingRef.current);
-    if (pendingRenderTimerRef.current) clearTimeout(pendingRenderTimerRef.current);
     undoTimersRef.current.forEach(timer => clearTimeout(timer));
   }, []);
 
+  // AI clips that fell back to stock (e.g. the AI video service was unavailable)
+  const aiFallbackCount = brollCues.filter(c => c.requested === "kling" && c.source === "pexels").length;
   const readyCount = clipUrls.filter(Boolean).length;
   const failedCount = failedClips.size;
   const clipCount = captions.length || clipUrls.length || 5;
@@ -339,7 +355,7 @@ export default function ClipReview() {
 
   return (
     <AppShell>
-      <div style={{ minHeight: "100vh", background: C.bg, color: C.fg, fontFamily: '"Geist", system-ui, sans-serif', padding: "40px 24px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: C.bg, color: C.fg, fontFamily: '"Geist", system-ui, sans-serif', padding: "40px 24px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
 
           {/* Header */}
@@ -383,6 +399,16 @@ export default function ClipReview() {
             <p style={{ color: C.fgDim, fontSize: 14, margin: "8px 0 0" }}>
               Swap any clip before rendering.
             </p>
+            {aiFallbackCount > 0 && (
+              <div role="status" style={{
+                marginTop: 14, padding: "10px 14px", borderRadius: 10,
+                border: "1px solid oklch(75% 0.17 75 / 0.35)", background: "oklch(75% 0.17 75 / 0.08)",
+                color: C.fg, fontSize: 13, lineHeight: 1.5,
+              }}>
+                AI footage was unavailable for {aiFallbackCount} {aiFallbackCount === 1 ? "clip" : "clips"}, so we used stock footage instead
+                (marked <strong>Stock</strong>). Use “Try another” on any clip you'd like to change.
+              </div>
+            )}
           </div>
 
           {/* Clip grid */}
@@ -519,7 +545,7 @@ export default function ClipReview() {
                 );
               })()}
               {/* Preset voices — no color dot (P2 fix) */}
-              {VOICES.map(v => {
+              {VOICES.filter(v => v.id !== OWNER_VOICE_ID || isAdmin).map(v => {
                 const isSelected = selectedVoiceId === v.id;
                 const isPlaying = playingVoiceId === v.id;
                 return (
@@ -629,14 +655,18 @@ export default function ClipReview() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                   </svg>
-                  <span style={{ color: C.fgMuted, fontSize: 14 }}>Rendering your video — usually 2–4 minutes…</span>
+                  <span style={{ color: C.fgMuted, fontSize: 14 }}>Rendering your video — usually {ESTIMATES.articleRender}…</span>
                 </div>
+                <p style={{ margin: "12px 0 0", color: C.fgDim, fontSize: 13 }}>
+                  You can close this tab — we'll email {user?.email ?? "you"} when it's ready, and it'll be in your{" "}
+                  <button type="button" onClick={() => navigate("/dashboard")} style={{ background: "none", border: "none", padding: 0, color: C.accent, cursor: "pointer", fontSize: 13 }}>Library</button>.
+                </p>
               </div>
             ) : pendingRender ? (
               /* P0: Confirmation step */
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
                 <p style={{ margin: 0, color: C.fgMuted, fontSize: 13 }}>
-                  This starts a ~2–4 min render. Ready to go?
+                  This starts the final render (usually {ESTIMATES.articleRender}). Ready to go?
                 </p>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <button
@@ -655,7 +685,6 @@ export default function ClipReview() {
                   </button>
                   <button
                     onClick={() => {
-                      if (pendingRenderTimerRef.current) clearTimeout(pendingRenderTimerRef.current);
                       setPendingRender(false);
                     }}
                     style={{

@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Player } from "@remotion/player";
 import AppShell from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
+import { ESTIMATES } from "@/lib/estimates";
 import { UserVideoCaption } from "@/remotion/UserVideoCaption";
 import type { TranscriptWord, KeepSegment, BrollLayout } from "@/remotion/UserVideoCaption";
 
@@ -200,7 +201,7 @@ export default function VideoStyle() {
   return (
     <AppShell>
       <div style={{
-        minHeight: "100vh", background: C.bg, color: C.fg,
+        flex: 1, minHeight: 0, overflowY: "auto", background: C.bg, color: C.fg,
         fontFamily: '"Geist", system-ui, sans-serif',
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         padding: "40px 24px", gap: 48, flexWrap: "wrap",
@@ -433,7 +434,8 @@ export default function VideoStyle() {
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
             <p style={{ margin: 0, fontSize: 13, color: C.fgMuted, lineHeight: 1.5 }}>
-              The preview above shows exactly what will be rendered. Generating a final 9:16 MP4 usually takes <strong style={{ color: C.fg }}>2–4 minutes</strong> and uses 1 credit.
+              The preview shows your captions and filler cuts. B-roll and zooms are added by the AI during the render,
+              which usually takes <strong style={{ color: C.fg }}>{ESTIMATES.talkingHeadRender}</strong> and uses 1 credit.
             </p>
           </div>
 

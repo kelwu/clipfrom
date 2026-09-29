@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { ESTIMATES } from "@/lib/estimates";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
+import UpgradeModal from "@/components/UpgradeModal";
+import { useCredits } from "@/lib/useCredits";
 
 const C = {
   bg: "oklch(14% 0.015 250)",
@@ -72,6 +74,8 @@ export default function HighlightPicker() {
   const [brollLayout, setBrollLayout] = useState<BrollLayout>("auto");
   const [analyzing, setAnalyzing] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const { outOfCredits } = useCredits();
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
 
@@ -125,6 +129,7 @@ export default function HighlightPicker() {
       await supabase.from("video_segments").delete().in("id", [...removedIds]);
     }
 
+    if (outOfCredits) { setShowUpgrade(true); return; }
     setGenerating(true);
     try {
       const res = await fetch(
@@ -146,7 +151,7 @@ export default function HighlightPicker() {
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        if (body.error === "no_credits") throw new Error("You're out of credits. Upgrade to generate more.");
+        if (body.error === "no_credits") { setShowUpgrade(true); setGenerating(false); return; }
         throw new Error(body.error ?? `Failed to start render: ${res.status}`);
       }
       navigate(`/results/${projectId}`, { state: { sourceMode: "long_video", userEmail } });
@@ -331,13 +336,14 @@ export default function HighlightPicker() {
             {generating ? (
               <><Spinner size={16} /> Starting renders…</>
             ) : (
-              `Generate ${keptCount} short${keptCount !== 1 ? "s" : ""}`
+              `Make ${keptCount} short${keptCount !== 1 ? "s" : ""} · 1 credit`
             )}
           </button>
 
           <p className="text-center text-xs" style={{ color: C.fgMuted }}>
-            1 credit · each short takes {ESTIMATES.perHighlight} · we'll email you when they're ready
+            Each short takes {ESTIMATES.perHighlight} · we'll email you when they're ready
           </p>
+          {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </div>
       </div>
     </AppShell>

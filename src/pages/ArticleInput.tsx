@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import UpgradeModal from "@/components/UpgradeModal";
+import UpgradeModal, { PLANS } from "@/components/UpgradeModal";
+import OnboardingModal from "@/components/OnboardingModal";
+import BrollLayoutIcon from "@/components/BrollLayoutIcon";
 import { toast } from "sonner";
 import * as tus from "tus-js-client";
 import { supabase } from "@/lib/supabase";
@@ -9,26 +11,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ESTIMATES } from "@/lib/estimates";
 
 const LOG_LINES = [
-  { text: "$ Initializing AI pipeline...", color: "text-gray-400" },
-  { text: "✓ Article fetched successfully", color: "text-emerald-400" },
-  { text: "✓ Narrative structure analyzed", color: "text-emerald-400" },
-  { text: "✓ Key moments extracted", color: "text-emerald-400" },
-  { text: "› Generating script segments...", color: "text-amber-400" },
-  { text: "› Optimizing for short-form...", color: "text-amber-400" },
-  { text: "› Writing caption variations...", color: "text-amber-400" },
-  { text: "⠦ Finalizing your content...", color: "text-gray-400" },
+  { text: "Reading the article…", color: "text-gray-400" },
+  { text: "Finding the key points…", color: "text-gray-400" },
+  { text: "Writing your five-line script…", color: "text-gray-400" },
+  { text: "Almost there…", color: "text-gray-400" },
 ];
 
 const FEATURES = [
   {
     icon: <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 2v3M9 13v3M2 9h3M13 9h3M4 4l2 2M12 12l2 2M4 14l2-2M12 6l2-2"/></svg>,
-    title: "AI caption generation",
-    desc: "Five hook options for every clip, across all five clips — different angles, tones, and energy. Pick the line that sounds like you.",
+    title: "AI script writing",
+    desc: "ClipFrom reads the article and writes a punchy five-line script — one line per clip. Rewrite or drop any line before you render.",
   },
   {
     icon: <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="7" y="2" width="4" height="9" rx="2"/><path d="M4 9a5 5 0 0 0 10 0M9 14v2M6 16h6"/></svg>,
     title: "Natural voiceover",
-    desc: "A human-sounding voice, timed to the beat and synced to the captions. Pick from multiple presets.",
+    desc: "A human-sounding voice, synced word-for-word with the captions. Pick a preset voice or clone your own.",
   },
   {
     icon: <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M2 7h14M6 4v10"/></svg>,
@@ -42,31 +40,30 @@ const FEATURES = [
   },
   {
     icon: <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h8l-2-2M3 4l2 2M15 14H7l2 2M15 14l-2-2M2 9h14"/></svg>,
-    title: "Inline editing",
-    desc: "Fine-tune any caption, swap a hook, regenerate a clip — before anything hits the render queue.",
+    title: "Review before render",
+    desc: "Rewrite any line, swap any clip, change the voice — nothing renders until you approve it.",
   },
   {
     icon: <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M2 6l7 5 7-5"/></svg>,
     title: "Email delivery",
-    desc: "Drop your URL and walk away. We'll ping you the moment the render lands — usually 5–10 minutes.",
+    desc: "Drop your link and walk away. We email you when your clips are ready to review, and again when the video is done.",
   },
 ];
 
-const TRANSITIONS = [
-  { name: "Hard cut", icon: <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="6" y="10" width="14" height="24" rx="2"/><rect x="24" y="10" width="14" height="24" rx="2" opacity=".4"/></svg> },
-  { name: "Whip pan", icon: <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 22h8M30 22h8M18 14l6 8-6 8M26 14l-6 8 6 8"/></svg> },
-  { name: "Zoom", icon: <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="22" cy="22" r="6"/><circle cx="22" cy="22" r="12" opacity=".5"/><circle cx="22" cy="22" r="18" opacity=".2"/></svg> },
-  { name: "Smooth", icon: <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 22c6-8 12-8 16 0s10 8 16 0"/></svg> },
-  { name: "Glitch", icon: <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 22h6M18 16v12M22 22h6M30 16v12"/></svg> },
-  { name: "Blur", icon: <svg viewBox="0 0 44 44" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="22" cy="22" r="14" opacity=".4"/><circle cx="22" cy="22" r="10" opacity=".7"/><circle cx="22" cy="22" r="6"/></svg> },
+const STYLE_PRESETS = [
+  { name: "Viral", desc: "Word-by-word highlights, zoom punches, hard cuts" },
+  { name: "Clean", desc: "Bold karaoke text, smooth fades, real stock clips" },
+  { name: "Cinematic", desc: "Subtitle bar, wipe transitions, AI + stock mix" },
+  { name: "Raw", desc: "No captions, pure visuals, hard cuts" },
 ];
 
 const FAQ_ITEMS = [
-  { q: "How long does a video take to render?", a: "Usually 5–10 minutes. Article videos pause once so you can review the clips; after you hit render you can close the tab and we'll email you when it's ready." },
-  { q: "What kinds of articles work best?", a: "Anything with a clear narrative — news stories, blog posts, opinion pieces, newsletter editions. We've also had users feed in research paper abstracts with great results." },
-  { q: "Can I edit the video after it's generated?", a: "Before the final render you can edit or drop any caption, swap individual clips, and change the voice. After rendering you can still tweak the Instagram caption; to change the video itself, generate it again." },
-  { q: "Does ClipFrom post to Instagram for me?", a: "Not yet — we deliver the video file and the caption as a copy-paste block. Direct publishing is on our roadmap." },
-  { q: "What about TikTok and YouTube Shorts?", a: "Same 9:16 output works for all three. Paste, post, done." },
+  { q: "How long does a video take?", a: "About 10 minutes for an article: a few minutes to make the clips, a pause for your review (we email you when they're ready), then 3–10 minutes to render. Your own talking-head videos take 3–6 minutes. You can close the tab at any point." },
+  { q: "Can I use my own videos?", a: "Yes. Upload a clip of you talking (up to 200 MB) and ClipFrom adds animated captions, cuts filler words, drops in b-roll where it helps, and punches in on your key lines. Longer podcasts or interviews can be turned into several short highlights." },
+  { q: "What kinds of articles work best?", a: "Anything with a clear narrative — news stories, blog posts, opinion pieces, newsletter editions. If a site blocks automatic reading (paywalls often do), paste the article text instead." },
+  { q: "Can I edit the video?", a: "Before the final render you can rewrite or drop any script line, swap individual clips, and change the voice. For your own uploaded videos you can change the caption style or b-roll and re-render. You can always edit the post caption." },
+  { q: "Does ClipFrom post to Instagram for me?", a: "Not yet — you get the video file plus a ready-to-paste caption. Direct publishing is on our roadmap." },
+  { q: "How much does it cost?", a: "Your first 2 videos are free, no credit card needed. Paid plans start at $12/month for 5 videos." },
   { q: "Who owns the generated videos?", a: "You do. Full commercial rights on every plan." },
 ];
 
@@ -105,7 +102,6 @@ const ArticleInput = () => {
   const [inputMode, setInputMode] = useState<"url" | "text" | "video" | "long_video">("url");
   const [articleUrl, setArticleUrl] = useState("");
   const [articleText, setArticleText] = useState("");
-  const [userEmail, setUserEmail] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [stage, setStage] = useState(0);
@@ -115,7 +111,6 @@ const ArticleInput = () => {
   const [visibleLines, setVisibleLines] = useState(0);
   const [typedUrl, setTypedUrl] = useState("");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [activeTransition, setActiveTransition] = useState(0);
 
   const [credits, setCredits] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -140,7 +135,45 @@ const ArticleInput = () => {
       });
   }, [user?.id]);
 
-  const stages = ["Analyzing your content…", "Extracting key insights…", "Generating captions…", "Polishing results…"];
+  const stages = ["Reading your article…", "Finding the key points…", "Writing your script…", "Almost there…"];
+
+  // What a logged-out visitor typed survives sign-up. localStorage (not sessionStorage),
+  // because the confirmation email often opens in a new tab.
+  const PENDING_INPUT_KEY = "clipfrom_pending_input";
+  const goToSignup = () => {
+    try {
+      localStorage.setItem(PENDING_INPUT_KEY, JSON.stringify({ mode: inputMode, url: articleUrl, text: articleText, ts: Date.now() }));
+    } catch { /* ignore */ }
+    navigate("/login?mode=signup&returnTo=/");
+  };
+  useEffect(() => {
+    if (!user) return;
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(PENDING_INPUT_KEY); localStorage.removeItem(PENDING_INPUT_KEY); } catch { return; }
+    if (!raw) return;
+    try {
+      const p = JSON.parse(raw) as { mode?: typeof inputMode; url?: string; text?: string; ts?: number };
+      if (!p.ts || Date.now() - p.ts > 24 * 60 * 60 * 1000) return;
+      if (p.mode) setInputMode(p.mode);
+      if (p.url) setArticleUrl(p.url);
+      if (p.text) setArticleText(p.text);
+      if (p.mode === "video" || p.mode === "long_video") toast.message("You're in! Choose your video again to upload it.");
+      else if (p.url || p.text) toast.success("You're in! Your article is ready — hit Generate.");
+      heroRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch { /* ignore */ }
+  }, [user?.id]);
+
+  // Turn backend errors into something the user can act on
+  const explainArticleError = (message: string): { text: string; pasteInstead: boolean } => {
+    if (/Article fetch failed: (401|402|403|429|451)/.test(message) || /JavaScript-rendered/i.test(message)) {
+      return { text: "This site blocks automatic reading (paywalls often do). Paste the article text instead.", pasteInstead: true };
+    }
+    if (/Article fetch failed: (404|410)/.test(message)) return { text: "We couldn't find that page — check the link and try again.", pasteInstead: false };
+    if (/Article fetch failed: 5\d\d/.test(message)) return { text: "That site had an error. Try again in a minute, or paste the text instead.", pasteInstead: true };
+    if (/timeout|timed out|aborted/i.test(message)) return { text: "That site took too long to respond. Try again, or paste the text instead.", pasteInstead: true };
+    if (/private address|Only http/i.test(message)) return { text: "That link isn't a public web page. Try a different URL.", pasteInstead: false };
+    return { text: message.replace(/^Error:\s*/, ""), pasteInstead: /paste/i.test(message) };
+  };
 
   useEffect(() => {
     if (!isLoading) return;
@@ -224,24 +257,31 @@ const ArticleInput = () => {
     setIsLoading(true);
     const pollStart = Date.now();
     pollingRef.current = setInterval(async () => {
-      if (Date.now() - pollStart > 6 * 60 * 1000) {
-        clearInterval(pollingRef.current!); setIsLoading(false); clearPendingUpload();
-        toast.error("Transcription is taking too long. Please try again."); return;
+      // Don't make people wait on a spinner (or re-upload): transcription keeps running
+      // server-side, and the video shows up in the Library when it's ready.
+      if (Date.now() - pollStart > (mode === "long_video" ? 10 : 6) * 60 * 1000) {
+        clearInterval(pollingRef.current!); pollingRef.current = null; setIsLoading(false);
+        toast.message("Still transcribing — longer videos take a while. It'll be waiting in your Library.");
+        navigate("/dashboard"); return;
       }
       try {
         const { data } = await supabase
           .from("ai_generations")
-          .select("status, transcript_words")
+          .select("status, transcript_words, debug_log")
           .eq("project_id", projectId).maybeSingle();
         if (data?.status === "captions_ready") {
           clearInterval(pollingRef.current!); clearPendingUpload();
           const wordCount = Array.isArray(data.transcript_words)
             ? (data.transcript_words as { type: string }[]).filter(w => w.type === "word").length : 0;
+          if (wordCount === 0) toast.message("We didn't hear any speech in that video — captions and b-roll need someone talking.");
           navigate(mode === "long_video" ? `/highlight-picker/${projectId}` : `/video-style/${projectId}`,
             { state: { userEmail: email, wordCount } });
         } else if (data?.status === "transcription_error") {
           clearInterval(pollingRef.current!); setIsLoading(false); clearPendingUpload();
-          toast.error("We couldn't transcribe that video. Please try again.");
+          const log = String(data.debug_log ?? "");
+          toast.error(/Scribe error 4\d\d/.test(log)
+            ? "We couldn't read the audio in that file. Export it as MP4 (H.264 video, AAC audio) and try again."
+            : "We couldn't transcribe that video. Please try again, or upload a different file.");
         }
       } catch { /* keep polling */ }
     }, 3000);
@@ -301,12 +341,32 @@ const ArticleInput = () => {
     // ── Video upload modes (talking head + long video) ────────────────────────
     if (inputMode === "video" || inputMode === "long_video") {
       if (!videoFile) { toast.error("Please select a video file"); return; }
-      if (!user) { navigate("/login?returnTo=/"); return; }
+      if (!user) { goToSignup(); return; }
+      if (!/\.(mp4|mov|m4v|webm)$/i.test(videoFile.name)) {
+        toast.error("Please upload an MP4, MOV, or WebM video.");
+        return;
+      }
       // Supabase Pro tier — limit raised to 200 MB. TUS handles chunked upload.
       const MAX_SIZE_MB = 200;
       if (videoFile.size > MAX_SIZE_MB * 1024 * 1024) {
         toast.error(`Video is too large (${(videoFile.size / 1024 / 1024).toFixed(0)} MB). Maximum is ${MAX_SIZE_MB} MB.`);
         return;
+      }
+
+      // Read the duration now: if the browser can't open the file, the transcriber can't either
+      const videoDurationFrames = await new Promise<number>((resolve) => {
+        const vid = document.createElement("video");
+        vid.preload = "metadata";
+        vid.onloadedmetadata = () => { resolve(Math.round(vid.duration * 30)); URL.revokeObjectURL(vid.src); };
+        vid.onerror = () => { resolve(-1); URL.revokeObjectURL(vid.src); };
+        vid.src = URL.createObjectURL(videoFile);
+      });
+      if (videoDurationFrames < 0) {
+        toast.error("We can't read this video file. Export it as MP4 (H.264) and try again.");
+        return;
+      }
+      if (inputMode === "video" && videoDurationFrames > 5 * 60 * 30) {
+        toast.message("That's a long clip — for podcasts and interviews, the Long video tab turns it into several shorts.");
       }
 
       setUploadPct(0);
@@ -358,14 +418,6 @@ const ArticleInput = () => {
 
         const { data: { publicUrl } } = supabase.storage.from("user-videos").getPublicUrl(filePath);
 
-        const videoDurationFrames = await new Promise<number>((resolve) => {
-          const vid = document.createElement("video");
-          vid.preload = "metadata";
-          vid.onloadedmetadata = () => { resolve(Math.round(vid.duration * 30)); URL.revokeObjectURL(vid.src); };
-          vid.onerror = () => resolve(0);
-          vid.src = URL.createObjectURL(videoFile);
-        });
-
         const resolvedEmail = user.email ?? "";
         // Persist recovery state, then fire transcription WITHOUT blocking. If the tab is
         // suspended during transcription the server still finishes, and polling / the recovery
@@ -392,7 +444,8 @@ const ArticleInput = () => {
     if (inputMode === "url") {
       content = articleUrl.trim();
       if (!content) { toast.error("Please enter an article URL"); return; }
-      try { new URL(content); } catch { toast.error("Please enter a valid URL"); return; }
+      if (!/^https?:\/\//i.test(content)) content = `https://${content}`; // "nytimes.com/…" is fine
+      try { new URL(content); } catch { toast.error("That doesn't look like a link — check the URL and try again"); return; }
     } else {
       content = articleText.trim();
       if (!content) { toast.error("Please paste some article text"); return; }
@@ -419,9 +472,9 @@ const ArticleInput = () => {
       return;
     }
 
-    if (!user) { navigate("/login?returnTo=/"); return; }
+    if (!user) { goToSignup(); return; }
 
-    const resolvedEmail = user.email ?? userEmail.trim();
+    const resolvedEmail = user.email ?? "";
     if (!resolvedEmail) { toast.error("Could not determine email address"); return; }
 
     setIsLoading(true);
@@ -452,7 +505,9 @@ const ArticleInput = () => {
       );
       navigate("/editor", { state: { projectId, userEmail: resolvedEmail, content, inputMode, captions: captionForEditor } });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to process your content. Please try again.");
+      const { text, pasteInstead } = explainArticleError(error instanceof Error ? error.message : String(error));
+      toast.error(text);
+      if (pasteInstead && inputMode === "url") setInputMode("text");
       setIsLoading(false);
     }
   };
@@ -489,8 +544,7 @@ const ArticleInput = () => {
           })()}
           <div className="bg-[#0d0d0d] border border-gray-800 rounded-xl overflow-hidden text-left">
             <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-800 bg-[#111]">
-              <div className="w-3 h-3 rounded-full bg-[#ff5f57]" /><div className="w-3 h-3 rounded-full bg-[#febc2e]" /><div className="w-3 h-3 rounded-full bg-[#28c840]" />
-              <span className="ml-3 text-xs text-gray-500 font-medium select-none">{(inputMode === "video" || inputMode === "long_video") ? "AI Studio — Transcribing" : "AI Studio — Processing"}</span>
+              <span className="text-xs text-gray-500 font-medium select-none">Progress</span>
             </div>
             <div className="p-4 font-mono text-xs space-y-1.5 min-h-[160px]">
               {((inputMode === "video" || inputMode === "long_video") ? VIDEO_LOG_LINES : LOG_LINES).slice(0, visibleLines).map((line, i) => (
@@ -511,6 +565,7 @@ const ArticleInput = () => {
   return (
     <>
       {showUpgrade && createPortal(<UpgradeModal onClose={() => setShowUpgrade(false)} />, document.body)}
+      {user && <OnboardingModal />}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -519,7 +574,17 @@ const ArticleInput = () => {
         .cf-step-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; margin-bottom: 80px; }
         .cf-step-grid-last { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
         .cf-features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 48px; }
-        .cf-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
+        .cf-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
+        .cf-own-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
+        .cf-presets-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .cf-pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        @media (max-width: 900px) {
+          .cf-own-grid { grid-template-columns: 1fr; }
+          .cf-presets-grid, .cf-pricing-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 520px) {
+          .cf-presets-grid, .cf-pricing-grid { grid-template-columns: 1fr; }
+        }
         .cf-nav-links { display: flex; align-items: center; gap: 24px; }
         @keyframes cf-float-l { 0%,100% { transform: rotate(-10deg) translateY(0px); } 50% { transform: rotate(-10deg) translateY(-10px); } }
         @keyframes cf-float-c { 0%,100% { transform: rotate(-1deg) translateY(0px); } 50% { transform: rotate(-1deg) translateY(-8px); } }
@@ -564,6 +629,8 @@ const ArticleInput = () => {
             <div className="cf-nav-links">
               <button onClick={() => navigate("/features")} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0, transition: "color 0.15s" }}
                 onMouseEnter={e => (e.currentTarget.style.color = C.fg)} onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>Features</button>
+              <button onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0, transition: "color 0.15s" }}
+                onMouseEnter={e => (e.currentTarget.style.color = C.fg)} onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>Pricing</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               {user ? (
@@ -572,7 +639,7 @@ const ArticleInput = () => {
                 <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: C.fgMuted, fontSize: 14, cursor: "pointer", padding: 0, transition: "color 0.15s" }}
                   onMouseEnter={e => (e.currentTarget.style.color = C.fg)} onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>Login</button>
               )}
-              <button onClick={() => user ? heroRef.current?.scrollIntoView({ behavior: "smooth" }) : navigate("/login")}
+              <button onClick={() => user ? heroRef.current?.scrollIntoView({ behavior: "smooth" }) : navigate("/login?mode=signup")}
                 style={{ padding: "7px 18px", background: C.accent, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, color: "oklch(14% 0.015 250)", cursor: "pointer" }}>
                 {user ? "New video" : "Get Started"}
               </button>
@@ -593,13 +660,13 @@ const ArticleInput = () => {
               <div>
                 <div className="cf-badge">
                   <span className="cf-badge-dot" />
-                  Article → Reels in minutes
+                  Articles & your videos → Reels
                 </div>
                 <h1 style={{ fontFamily: serif, fontSize: "clamp(3rem, 4.8vw, 4.4rem)", fontWeight: 400, lineHeight: 1.03, letterSpacing: "-0.025em", margin: "0 0 22px" }}>
                   Turn any article into<br /><span className="cf-h1-em">Reels that perform.</span>
                 </h1>
                 <p style={{ color: C.fgMuted, fontSize: 16, lineHeight: 1.65, maxWidth: 420, margin: "0 0 36px" }}>
-                  Paste a URL, walk away. ClipFrom writes the script, records the voice, sources B-roll, and stitches five 9:16 clips — ready to post on Instagram.
+                  Paste a URL, walk away. ClipFrom writes the script, records the voice, sources B-roll, and stitches five 9:16 clips. Or upload a video of yourself — the AI adds captions, cuts filler, and drops in b-roll.
                 </p>
 
                 <form onSubmit={handleSubmit} style={{ maxWidth: 480 }}>
@@ -608,8 +675,8 @@ const ArticleInput = () => {
                     boxShadow: `0 0 0 1px oklch(72% 0.17 280 / 0.08), 0 32px 64px oklch(0% 0 0 / 0.5), 0 0 80px oklch(72% 0.17 280 / 0.07)` }}>
                     {/* Mode tabs — inside the card */}
                     <div style={{ display: "flex", gap: 3, padding: 5, background: `oklch(12% 0.015 255)`, borderBottom: `1px solid ${C.strokeSoft}` }}>
-                      {([["url", "URL"], ["text", "Paste Text"], ["video", "Short Video"], ["long_video", "Long Video"]] as const).map(([mode, label]) => (
-                        <button key={mode} type="button" onClick={() => setInputMode(mode)}
+                      {([["url", "Article link"], ["text", "Paste text"], ["video", "Your video"], ["long_video", "Long video"]] as const).map(([mode, label]) => (
+                        <button key={mode} type="button" onClick={() => setInputMode(mode)} aria-pressed={inputMode === mode}
                           style={{ flex: 1, padding: "7px 6px", borderRadius: 10, border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
                             background: inputMode === mode ? C.accent : "transparent",
                             color: inputMode === mode ? "oklch(11% 0.018 255)" : C.fgMuted,
@@ -646,7 +713,7 @@ const ArticleInput = () => {
                         </div>
                       ) : (
                         <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "24px 16px", cursor: "pointer", textAlign: "center" }}>
-                          <input type="file" accept="video/*" style={{ display: "none" }} onChange={e => setVideoFile(e.target.files?.[0] ?? null)} />
+                          <input type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" style={{ display: "none" }} onChange={e => setVideoFile(e.target.files?.[0] ?? null)} />
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={videoFile ? C.accent : C.fgMuted} strokeWidth="1.5">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                           </svg>
@@ -671,8 +738,8 @@ const ArticleInput = () => {
                                 </>
                               ) : (
                                 <>
-                                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Upload your talking-head video</p>
-                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>Captions + B-roll + filler removal</p>
+                                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>Upload a video of you talking</p>
+                                  <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>Up to ~5 min · captions, b-roll, zooms, filler removal</p>
                                   <p style={{ margin: "4px 0 0", fontSize: 11, color: C.fgMuted }}>MP4, MOV, WebM · max 200 MB</p>
                                 </>
                               )}
@@ -693,9 +760,7 @@ const ArticleInput = () => {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.fgMuted} strokeWidth="2" style={{ flexShrink: 0 }}>
                           <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                         </svg>
-                        <input type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)}
-                          placeholder="your@email.com — we'll notify you when it's ready"
-                          style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: C.fg, fontSize: 14 }} />
+                        <span style={{ flex: 1, fontSize: 14, color: C.fgMuted }}>Free account · 2 videos on us · we email you when it's ready</span>
                       </div>
                     )}
                     <div style={{ padding: 10 }}>
@@ -718,7 +783,7 @@ const ArticleInput = () => {
                               transition: "all 0.15s",
                             }}
                           >
-                            {outOfCredits ? "Out of credits — upgrade to continue" : videoTooLarge ? "Video too large (max 200 MB)" : inputMode === "video" ? "Upload & Transcribe" : "Generate my video"}
+                            {outOfCredits ? "Out of credits — upgrade to continue" : videoTooLarge ? "Video too large (max 200 MB)" : inputMode === "video" ? "Upload & transcribe" : inputMode === "long_video" ? "Upload & find highlights" : user ? "Generate my video" : "Sign up free & generate"}
                             {!outOfCredits && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>}
                           </button>
                         );
@@ -728,8 +793,10 @@ const ArticleInput = () => {
 
                   <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 14 }}>
                     {(inputMode === "video"
-                      ? ["9:16 vertical", "Auto captions", "B-roll added"]
-                      : ["9:16 vertical", "AI voiceover", "~5–10 min render"]
+                      ? ["9:16 vertical", "Auto captions", "AI b-roll & zooms"]
+                      : inputMode === "long_video"
+                        ? ["3–5 shorts", "Auto captions", "B-roll added"]
+                        : ["9:16 vertical", "AI voiceover", "~10 min total"]
                     ).map(item => (
                       <span key={item} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.fgMuted, fontFamily: mono }}>
                         <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.accent, display: "inline-block" }} />
@@ -893,7 +960,7 @@ const ArticleInput = () => {
         {/* ── Stats bar ── */}
         <div style={{ background: C.surface, borderTop: `1px solid ${C.strokeSoft}`, borderBottom: `1px solid ${C.strokeSoft}`, padding: "16px 24px" }}>
           <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-            {["~5–10 min render", "5 clips", "4 voices", "6 transitions", "1080p", "0 code"].map((stat, i, arr) => (
+            {["2 free videos", "5 clips per article", "Voice cloning", "Upload your own videos", "1080p · 9:16", "No editing skills"].map((stat, i, arr) => (
               <span key={stat} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontFamily: mono, fontSize: 12, color: C.fgMuted }}>{stat}</span>
                 {i < arr.length - 1 && <span style={{ color: C.fgDim }}>·</span>}
@@ -917,9 +984,9 @@ const ArticleInput = () => {
               <div>
                 <div style={{ fontFamily: mono, fontSize: 10, color: C.fgDim, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>STEP 01 / FETCH</div>
                 <h3 style={{ fontFamily: serif, fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, margin: "0 0 16px" }}>Paste a URL.<br/>We fetch everything.</h3>
-                <p style={{ color: C.fgMuted, fontSize: 15, lineHeight: 1.65, margin: "0 0 20px" }}>Drop any article link — blog post, news story, research paper. Our pipeline fetches the full text, finds the narrative arc, and generates hook variants before you close the tab.</p>
+                <p style={{ color: C.fgMuted, fontSize: 15, lineHeight: 1.65, margin: "0 0 20px" }}>Drop any article link — blog post, news story, research paper. ClipFrom reads the full text, finds the story, and writes a punchy five-line script. We email you when your clips are ready.</p>
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {["Works with any public URL", "Or paste the article text directly", "Multi-language support coming soon"].map(item => (
+                  {["Works with most public articles", "Or paste the article text directly", "Email when your clips are ready"].map(item => (
                     <li key={item} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.fgMuted }}>
                       <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke={C.accent} strokeWidth="2"><path d="M2 6l3 3 5-6"/></svg>
                       {item}
@@ -937,8 +1004,8 @@ const ArticleInput = () => {
                     {[
                       { label: "Article fetched", val: "1,842 words", done: true },
                       { label: "Narrative parsed", val: "5 beats", done: true },
-                      { label: "Hooks generated", val: "25 variants", done: true },
-                      { label: "Matching B-roll", val: "rendering…", done: false },
+                      { label: "Script written", val: "5 lines", done: true },
+                      { label: "Finding footage", val: "working…", done: false },
                     ].map(({ label, val, done }) => (
                       <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
@@ -960,11 +1027,11 @@ const ArticleInput = () => {
             {/* Step 02 */}
             <div className="cf-step-grid">
               <div className="cf-flip" style={{ order: 2 }}>
-                <div style={{ fontFamily: mono, fontSize: 10, color: C.fgDim, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>STEP 02 / EDIT</div>
-                <h3 style={{ fontFamily: serif, fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, margin: "0 0 16px" }}>Pick your hooks.<br/>Edit if you want.</h3>
-                <p style={{ color: C.fgMuted, fontSize: 15, lineHeight: 1.65, margin: "0 0 20px" }}>Every clip gets five hook variants — different angles, tones, and energy. Lock the line that sounds like you, or rewrite in a tap.</p>
+                <div style={{ fontFamily: mono, fontSize: 10, color: C.fgDim, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>STEP 02 / REVIEW</div>
+                <h3 style={{ fontFamily: serif, fontSize: 34, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, margin: "0 0 16px" }}>Review the script.<br/>Swap anything.</h3>
+                <p style={{ color: C.fgMuted, fontSize: 15, lineHeight: 1.65, margin: "0 0 20px" }}>Each clip gets one line of your script. Rewrite any line, drop the ones you don't need, pick a style — then swap any clip or the voice before the final render.</p>
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {["5 hooks × 5 clips", "Inline editing with keyword highlighting", "Regenerate until it's right"].map(item => (
+                  {["Edit or drop any line", "Swap clips and voices", "Nothing renders until you approve"].map(item => (
                     <li key={item} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.fgMuted }}>
                       <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke={C.accent} strokeWidth="2"><path d="M2 6l3 3 5-6"/></svg>
                       {item}
@@ -975,8 +1042,8 @@ const ArticleInput = () => {
               <div className="cf-flip" style={{ order: 1 }}>
                 <div style={{ background: C.surface, border: `1px solid ${C.strokeMed}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 20px 40px oklch(0% 0 0 / 0.3)" }}>
                   <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.strokeSoft}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: mono, fontSize: 11, color: C.fgMuted }}>Clip 3 · Pick a hook</span>
-                    <span style={{ fontFamily: mono, fontSize: 10, color: C.fgDim }}>5 options</span>
+                    <span style={{ fontFamily: mono, fontSize: 11, color: C.fgMuted }}>Your script</span>
+                    <span style={{ fontFamily: mono, fontSize: 10, color: C.fgDim }}>Editing line 2</span>
                   </div>
                   <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
                     {[
@@ -1045,6 +1112,66 @@ const ArticleInput = () => {
           </div>
         </section>
 
+        {/* ── Your own videos ── */}
+        <section id="your-videos" style={{ padding: "96px 24px", borderTop: `1px solid ${C.strokeSoft}` }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 56 }}>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>— Got footage?</div>
+              <h2 style={{ fontFamily: serif, fontSize: "clamp(2rem, 3.5vw, 3rem)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1, margin: "0 0 16px" }}>
+                Your video, <em>edited by AI</em>.
+              </h2>
+              <p style={{ color: C.fgMuted, fontSize: 16, maxWidth: 540, margin: "0 auto" }}>
+                Upload a clip of you talking. ClipFrom edits it like a pro would — then you download a finished Reel.
+              </p>
+            </div>
+            <div className="cf-own-grid">
+              <div style={{ background: C.surface, border: `1px solid ${C.strokeSoft}`, borderRadius: 16, padding: 28 }}>
+                <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 10 }}>Talking-head videos</div>
+                <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    "Animated word-by-word captions",
+                    "Filler words (um, uh) cut automatically",
+                    "B-roll chosen for what you're saying",
+                    "Zoom punch-ins on your key lines",
+                  ].map(item => (
+                    <li key={item} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: C.fgMuted }}>
+                      <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke={C.accent} strokeWidth="2"><path d="M2 6l3 3 5-6"/></svg>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div style={{ fontFamily: mono, fontSize: 10, color: C.fgDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+                  B-roll layouts the AI picks between
+                </div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  {([["fullscreen", "Full screen"], ["top-three-quarters", "Top ¾"], ["top-half", "Split"], ["bottom-third", "Bottom band"], ["corner", "Corner"]] as const).map(([layout, label]) => (
+                    <div key={layout} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                      <div style={{ transform: "scale(1.6)", transformOrigin: "top center", height: 52 }}>
+                        <BrollLayoutIcon layout={layout} color={C.accent} />
+                      </div>
+                      <span style={{ fontFamily: mono, fontSize: 10, color: C.fgMuted }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ background: C.surface, border: `1px solid ${C.strokeSoft}`, borderRadius: 16, padding: 28 }}>
+                <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 10 }}>Podcasts & interviews</div>
+                <p style={{ color: C.fgMuted, fontSize: 14, lineHeight: 1.65, margin: "0 0 20px" }}>
+                  Upload a longer recording and ClipFrom finds the 3–5 moments worth sharing, then turns each one into its own captioned short with b-roll.
+                </p>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {["Pick which highlights to keep", "Each short captioned and edited", "One credit for the whole batch"].map(item => (
+                    <li key={item} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: C.fgMuted }}>
+                      <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke={C.accent} strokeWidth="2"><path d="M2 6l3 3 5-6"/></svg>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── Features ── */}
         <section id="features" style={{ padding: "96px 24px", borderTop: `1px solid ${C.strokeSoft}` }}>
           <div style={{ maxWidth: 1120, margin: "0 auto" }}>
@@ -1067,24 +1194,72 @@ const ArticleInput = () => {
                 </div>
               ))}
             </div>
-            {/* Transitions band */}
+            {/* Style presets band */}
             <div style={{ background: C.surface, border: `1px solid ${C.strokeSoft}`, borderRadius: 16, padding: 28 }}>
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Six transition styles, one click</div>
-                <div style={{ fontSize: 13, color: C.fgMuted }}>Pick the one that matches your vibe.</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Four style presets, one click</div>
+                <div style={{ fontSize: 13, color: C.fgMuted }}>Captions, transitions and footage, matched to the vibe you want.</div>
               </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {TRANSITIONS.map((t, i) => (
-                  <button key={t.name} onClick={() => setActiveTransition(i)}
-                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 16px", borderRadius: 10, cursor: "pointer", transition: "all 0.15s",
-                      background: activeTransition === i ? "oklch(72% 0.17 280 / 0.1)" : C.surfaceRaised,
-                      border: `1px solid ${activeTransition === i ? "oklch(72% 0.17 280 / 0.4)" : C.strokeSoft}`,
-                      color: activeTransition === i ? C.accent : C.fgMuted }}>
-                    <div style={{ width: 36, height: 36 }}>{t.icon}</div>
-                    <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: "0.06em" }}>{t.name}</span>
-                  </button>
+              <div className="cf-presets-grid">
+                {STYLE_PRESETS.map(p => (
+                  <div key={p.name} style={{ padding: "14px 16px", borderRadius: 10, background: C.surfaceRaised, border: `1px solid ${C.strokeSoft}` }}>
+                    <div style={{ fontFamily: mono, fontSize: 11, color: C.accent, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>{p.name}</div>
+                    <div style={{ fontSize: 13, color: C.fgMuted, lineHeight: 1.5 }}>{p.desc}</div>
+                  </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Pricing ── */}
+        <section id="pricing" style={{ padding: "96px 24px", borderTop: `1px solid ${C.strokeSoft}` }}>
+          <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 56 }}>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>— Pricing</div>
+              <h2 style={{ fontFamily: serif, fontSize: "clamp(2rem, 3.5vw, 3rem)", fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.1, margin: "0 0 16px" }}>
+                Start free. <em>Pay as you grow.</em>
+              </h2>
+              <p style={{ color: C.fgMuted, fontSize: 16, margin: 0 }}>One credit = one video. Failed renders are refunded automatically.</p>
+            </div>
+            <div className="cf-pricing-grid">
+              {[
+                { id: "free", name: "Free", price: 0, perGen: "No credit card", features: ["2 videos to start", "All caption styles", "AI + stock footage", "Your own talking-head videos"], highlight: false },
+                ...PLANS,
+              ].map(plan => (
+                <div key={plan.id} style={{
+                  background: C.surface, borderRadius: 16, padding: 24, display: "flex", flexDirection: "column",
+                  border: `1px solid ${plan.highlight ? "oklch(72% 0.17 280 / 0.45)" : C.strokeSoft}`,
+                  boxShadow: plan.highlight ? "0 0 40px oklch(72% 0.17 280 / 0.12)" : "none",
+                }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>{plan.name}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 4 }}>
+                    <span style={{ fontFamily: serif, fontSize: 40, lineHeight: 1 }}>${plan.price}</span>
+                    {plan.price > 0 && <span style={{ fontSize: 13, color: C.fgMuted }}>/month</span>}
+                  </div>
+                  <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, marginBottom: 20 }}>{plan.perGen}</div>
+                  <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+                    {plan.features.map(f => (
+                      <li key={f} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.fgMuted }}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke={C.accent} strokeWidth="2"><path d="M2 6l3 3 5-6"/></svg>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => (plan.id === "free"
+                      ? (user ? heroRef.current?.scrollIntoView({ behavior: "smooth" }) : navigate("/login?mode=signup"))
+                      : (user ? setShowUpgrade(true) : navigate("/login?mode=signup")))}
+                    style={{
+                      padding: "11px 0", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
+                      background: plan.highlight ? C.accent : "transparent",
+                      color: plan.highlight ? "oklch(14% 0.015 250)" : C.fg,
+                      border: plan.highlight ? "none" : `1px solid ${C.strokeMed}`,
+                    }}>
+                    {plan.id === "free" ? (user ? "Make a video" : "Start free") : user ? `Get ${plan.name}` : "Start free"}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -1132,7 +1307,7 @@ const ArticleInput = () => {
                   color: "oklch(14% 0.015 250)", cursor: "pointer", boxShadow: "0 0 30px oklch(72% 0.17 280 / 0.3)" }}>
                 Generate my first video →
               </button>
-              <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, marginTop: 16 }}>Free to try · No credit card · ~5–10 min render</div>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, marginTop: 16 }}>2 free videos · No credit card · Cancel anytime</div>
             </div>
           </div>
         </section>
@@ -1148,21 +1323,20 @@ const ArticleInput = () => {
                   </div>
                   <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.02em" }}>ClipFrom</span>
                 </div>
-                <p style={{ fontSize: 13, color: C.fgMuted, lineHeight: 1.7, maxWidth: 260, margin: 0 }}>Turn any article into short-form video that actually performs. Built for creators, newsletter writers, and content teams.</p>
+                <p style={{ fontSize: 13, color: C.fgMuted, lineHeight: 1.7, maxWidth: 260, margin: 0 }}>Turn articles and your own videos into short-form content that performs. Built for creators, newsletter writers, and content teams.</p>
               </div>
               {[
-                { title: "Product", links: ["Features", "Showcase", "Pricing", "Changelog"] },
-                { title: "Resources", links: ["Hook library", "Creator guide", "Blog", "Help center"] },
-                { title: "Company", links: ["About", "Careers", "Contact", "Terms"] },
+                { title: "Product", links: [{ label: "Features", href: "/features" }, { label: "Your videos", href: "#your-videos" }, { label: "Pricing", href: "#pricing" }] },
+                { title: "Legal", links: [{ label: "Terms", href: "/terms" }, { label: "Privacy", href: "/privacy" }] },
               ].map(col => (
                 <div key={col.title}>
                   <h4 style={{ fontFamily: mono, fontSize: 11, color: C.fgDim, textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 16px" }}>{col.title}</h4>
                   <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                     {col.links.map(link => (
-                      <li key={link}>
-                        <a href="#" style={{ fontSize: 14, color: C.fgMuted, textDecoration: "none", transition: "color 0.15s" }}
+                      <li key={link.label}>
+                        <a href={link.href} style={{ fontSize: 14, color: C.fgMuted, textDecoration: "none", transition: "color 0.15s" }}
                           onMouseEnter={e => (e.currentTarget.style.color = C.fg)}
-                          onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>{link}</a>
+                          onMouseLeave={e => (e.currentTarget.style.color = C.fgMuted)}>{link.label}</a>
                       </li>
                     ))}
                   </ul>

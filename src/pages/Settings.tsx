@@ -297,8 +297,8 @@ export default function Settings() {
             </button>
           </Section>
 
-          {/* Instagram */}
-          <Section title="Instagram" description="Connect your Instagram Business or Creator account to post Reels directly from ClipFrom.">
+          {/* Instagram — direct publishing waits on Meta app approval; admins only until then */}
+          {isAdmin && <Section title="Instagram" description="Connect your Instagram Business or Creator account to post Reels directly from ClipFrom.">
             {profile === null ? (
               <div className="h-16 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
             ) : profile.instagram_account_id ? (
@@ -342,7 +342,7 @@ export default function Settings() {
                 {connectingIg ? "Connecting…" : "Connect Instagram Account"}
               </button>
             )}
-          </Section>
+          </Section>}
 
           {/* Billing */}
           <Section title="Billing" description="Your current plan and credit balance.">
@@ -564,7 +564,7 @@ export default function Settings() {
           </Section>
 
           {/* Caption Outro */}
-          <Section title="Caption Outro" description="Text appended to the end of every Instagram caption you generate.">
+          <Section title="Caption Outro" description="Text added to the end of every post caption we write for you.">
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               {editingOutro ? (
                 <div className="p-4 space-y-3">

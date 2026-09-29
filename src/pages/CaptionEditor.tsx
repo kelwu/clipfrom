@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import AppShell from "@/components/layout/AppShell";
+import UpgradeModal from "@/components/UpgradeModal";
+import { useCredits } from "@/lib/useCredits";
 import { supabase } from "@/lib/supabase";
 
 interface Caption {
@@ -150,6 +152,8 @@ export default function CaptionEditor() {
     return () => { cancelled = true; };
   }, [captionsReady, projectId]);
   const [selectedPreset, setSelectedPreset] = useState<PresetId>("viral");
+  const { outOfCredits } = useCredits();
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [showHookCard, setShowHookCard] = useState(false);
   const [hookText, setHookText] = useState("");
   const [captionFont, setCaptionFont] = useState("Inter");
@@ -178,9 +182,11 @@ export default function CaptionEditor() {
       toast.error("Please enable at least one caption to generate videos.");
       return;
     }
+    // Check credits here so an empty balance opens the upgrade screen with the edits intact
+    if (outOfCredits) { setShowUpgrade(true); return; }
     const preset = PRESETS.find((p) => p.id === selectedPreset)!;
     setIsGenerating(true);
-    toast.success("Generating your videos...");
+    toast.success("Making your video…");
     navigate(`/results/${projectId}`, {
       state: {
         projectId,
@@ -209,7 +215,7 @@ export default function CaptionEditor() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 5l-7 7 7 7"/>
             </svg>
-            Dashboard
+            Library
           </button>
           <div className="h-4 w-px bg-gray-800" />
           <div className="flex items-center gap-2">
@@ -218,7 +224,7 @@ export default function CaptionEditor() {
                 <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <span className="text-sm text-gray-300 font-medium">Caption Review</span>
+            <span className="text-sm text-gray-300 font-medium">Your script</span>
           </div>
         </div>
 
@@ -231,18 +237,18 @@ export default function CaptionEditor() {
 
               {/* Heading */}
               <div className="mb-7">
-                <h1 className="text-2xl font-bold mb-1">Edit Your Captions</h1>
+                <h1 className="text-2xl font-bold mb-1">Edit your script</h1>
                 <p className="text-gray-400 text-sm">
-                  Review and customize the AI-generated captions. Toggle off any you don't want included.
+                  Each line becomes one clip, with its own voiceover and footage. Rewrite any line, or switch off the ones you don't want.
                 </p>
               </div>
 
               {/* Progress bar */}
               <div className="mb-6 bg-gray-900 rounded-xl px-5 py-4 border border-gray-800">
                 <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-sm text-gray-400">Selected for generation</span>
+                  <span className="text-sm text-gray-400">Lines in your video</span>
                   <span className="text-sm font-semibold text-emerald-400">
-                    {enabledCount} of {captions.length} captions
+                    {enabledCount} of {captions.length}
                   </span>
                 </div>
                 <div className="w-full bg-gray-800 rounded-full h-1.5">
@@ -267,13 +273,17 @@ export default function CaptionEditor() {
                     <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-semibold text-emerald-500 uppercase tracking-widest">
-                          Caption {caption.id}
+                          Line {caption.id}
                         </span>
                         <span className="text-xs text-gray-500">{caption.wordCount} words</span>
                       </div>
-                      <div
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={caption.enabled}
+                        aria-label={`Include line ${caption.id}`}
                         onClick={() => toggleCaption(caption.id)}
-                        className="flex items-center gap-2 cursor-pointer group"
+                        className="flex items-center gap-2 cursor-pointer group bg-transparent border-0 p-0"
                       >
                         <span className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">
                           {caption.enabled ? "Included" : "Excluded"}
@@ -289,7 +299,7 @@ export default function CaptionEditor() {
                             }`}
                           />
                         </div>
-                      </div>
+                      </button>
                     </div>
                     <div className="px-5 py-4">
                       <textarea
@@ -312,11 +322,11 @@ export default function CaptionEditor() {
                 disabled={isGenerating || enabledCount === 0}
                 className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold text-base transition-colors"
               >
-                {isGenerating ? "Generating..." : "Generate Video"}
+                {isGenerating ? "Starting…" : "Make my video · 1 credit"}
               </button>
               {enabledCount === 0 && (
                 <p className="text-center text-xs text-gray-500 mt-3">
-                  Enable at least one caption to continue
+                  Switch on at least one line to continue
                 </p>
               )}
             </div>
@@ -499,6 +509,7 @@ export default function CaptionEditor() {
 
         </div>
       </div>
+      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
     </AppShell>
   );
 }

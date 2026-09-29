@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
 import { ESTIMATES } from "@/lib/estimates";
 import { isFailedStatus, isRenderingStatus } from "@/lib/status";
+import { useCredits } from "@/lib/useCredits";
 
 interface RenderParams {
   captionStyle?: string;
@@ -65,6 +66,8 @@ export default function VideoResults() {
   const navigate = useNavigate();
   const { projectId: projectIdParam } = useParams();
   const { session, user } = useAuth();
+  // Direct Instagram publishing waits on Meta app approval — admins only until then
+  const { isAdmin } = useCredits();
 
   const [result, setResult] = useState<ResultData>({});
   const [loaded, setLoaded] = useState(false);
@@ -294,8 +297,9 @@ export default function VideoResults() {
 
         if (res.status === 409) return; // already rendering (e.g. double click) — just follow it
         if (res.status === 402) {
-          toast.error("You're out of credits. Upgrade to generate more videos.");
-          navigate("/");
+          // Go back to the screen the user came from (their edits are still there)
+          toast.error("You're out of credits — upgrade to make this video.");
+          navigate(-1);
           return;
         }
         if (!res.ok) {
@@ -803,7 +807,7 @@ export default function VideoResults() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {igConnected === false ? (
+          {!isAdmin ? null : igConnected === false ? (
             <button
               onClick={handleConnectInstagram}
               disabled={connectingIg}
@@ -909,7 +913,7 @@ export default function VideoResults() {
                   <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2"/>
                   <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor"/>
                 </svg>
-                <h3 className="font-semibold text-sm">Share on Instagram & TikTok</h3>
+                <h3 className="font-semibold text-sm">Caption for your post</h3>
               </div>
               <div className="p-4">
                 {instagramCaption || sourceMode === "video" || result.status === "complete" ? (

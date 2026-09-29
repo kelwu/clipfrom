@@ -12,14 +12,14 @@ interface Plan {
   features: string[];
 }
 
-const PLANS: Plan[] = [
+export const PLANS: Plan[] = [
   {
     id: "starter",
     name: "Starter",
     price: 12,
     credits: 5,
     perGen: "$2.40 / video",
-    features: ["5 videos per month", "All caption styles", "AI + stock footage", "Instagram posting"],
+    features: ["5 videos per month", "All caption styles", "AI + stock footage", "Your own talking-head videos"],
   },
   {
     id: "pro",
@@ -28,7 +28,7 @@ const PLANS: Plan[] = [
     credits: 20,
     perGen: "$1.45 / video",
     highlight: true,
-    features: ["20 videos per month", "All caption styles", "AI + stock footage", "Instagram posting", "Priority generation"],
+    features: ["20 videos per month", "All caption styles", "AI + stock footage", "Your own talking-head videos", "Priority generation"],
   },
   {
     id: "creator",
@@ -36,7 +36,7 @@ const PLANS: Plan[] = [
     price: 59,
     credits: 50,
     perGen: "$1.18 / video",
-    features: ["50 videos per month", "All caption styles", "AI + stock footage", "Instagram posting", "Priority generation"],
+    features: ["50 videos per month", "All caption styles", "AI + stock footage", "Your own talking-head videos", "Priority generation"],
   },
 ];
 

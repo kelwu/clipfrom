@@ -4,6 +4,9 @@ import { Player } from "@remotion/player";
 import AppShell from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
 import { ESTIMATES } from "@/lib/estimates";
+import { useCredits } from "@/lib/useCredits";
+import UpgradeModal from "@/components/UpgradeModal";
+import BrollLayoutIcon from "@/components/BrollLayoutIcon";
 import { UserVideoCaption } from "@/remotion/UserVideoCaption";
 import type { TranscriptWord, KeepSegment, BrollLayout } from "@/remotion/UserVideoCaption";
 
@@ -181,8 +184,12 @@ export default function VideoStyle() {
       return next;
     });
 
+  const { outOfCredits } = useCredits();
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
   const handleGenerate = async () => {
     if (!projectId) return;
+    if (outOfCredits) { setShowUpgrade(true); return; }
     setSaving(true);
     await supabase
       .from("ai_generations")
@@ -419,9 +426,13 @@ export default function VideoStyle() {
                     borderRadius: 10,
                     background: sel ? `oklch(72% 0.17 280 / 0.1)` : C.surface,
                     color: C.fg, cursor: "pointer", textAlign: "left",
-                  }}>
-                    <div style={{ fontWeight: 700, fontSize: 12 }}>{opt.label}</div>
-                    <div style={{ color: C.fgDim, fontSize: 10, marginTop: 2, lineHeight: 1.3 }}>{opt.desc}</div>
+                    display: "flex", gap: 8, alignItems: "flex-start",
+                  }} aria-pressed={sel}>
+                    <span style={{ flexShrink: 0 }}><BrollLayoutIcon layout={opt.value} color={sel ? C.accent : C.fgMuted} /></span>
+                    <span>
+                      <span style={{ display: "block", fontWeight: 700, fontSize: 12 }}>{opt.label}</span>
+                      <span style={{ display: "block", color: C.fgDim, fontSize: 10, marginTop: 2, lineHeight: 1.3 }}>{opt.desc}</span>
+                    </span>
                   </button>
                 );
               })}
@@ -459,8 +470,9 @@ export default function VideoStyle() {
               transition: "all 0.15s",
             }}
           >
-            {saving ? "Saving settings…" : "Generate Final Video"}
+            {saving ? "Saving settings…" : "Make my video · 1 credit"}
           </button>
+          {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
         </div>
       </div>
     </AppShell>

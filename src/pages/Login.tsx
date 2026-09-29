@@ -6,9 +6,14 @@ import { supabase } from "@/lib/supabase";
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || "/";
+  // Only same-site paths — never an absolute URL from the query string
+  const rawReturnTo = searchParams.get("returnTo") || "/";
+  const returnTo = rawReturnTo.startsWith("/") && !rawReturnTo.startsWith("//") ? rawReturnTo : "/";
 
-  const [mode, setMode] = useState<"signin" | "signup" | "reset" | "update-password">("signin");
+  // "Get Started" links open straight to sign-up (?mode=signup)
+  const [mode, setMode] = useState<"signin" | "signup" | "reset" | "update-password">(
+    searchParams.get("mode") === "signup" ? "signup" : "signin"
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,7 +53,11 @@ export default function Login() {
       });
       if (error) { toast.error(error.message); } else { setResetSent(true); }
     } else if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      // The confirmation link signs them in and brings them back to where they started
+      const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: `${window.location.origin}${returnTo}` },
+      });
       if (error) { toast.error(error.message); } else { setSignedUp(true); }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -126,7 +135,7 @@ export default function Login() {
               </div>
               <h2 className="text-lg font-bold text-white mb-2">Check your email</h2>
               <p className="text-sm text-gray-400 leading-relaxed">
-                We sent a confirmation link to <span className="text-gray-200">{email}</span>. Click it to activate your account, then come back to sign in.
+                We sent a confirmation link to <span className="text-gray-200">{email}</span>. Click it and you'll be signed in and brought right back — anything you typed is saved.
               </p>
               <button
                 onClick={() => { setMode("signin"); setSignedUp(false); }}
@@ -141,7 +150,7 @@ export default function Login() {
                 {mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your account" : "Reset your password"}
               </h1>
               <p className="text-sm text-gray-500 mb-6">
-                {mode === "signin" ? "Sign in to access your videos." : mode === "signup" ? "Start turning articles into short-form videos." : "Enter your email and we'll send a reset link."}
+                {mode === "signin" ? "Sign in to access your videos." : mode === "signup" ? "Your first 2 videos are free — no credit card." : "Enter your email and we'll send a reset link."}
               </p>
 
               {mode !== "reset" && (

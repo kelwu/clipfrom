@@ -493,6 +493,8 @@ export default function Dashboard() {
         .db-search { flex: 1; min-width: 160px; max-width: 320px; padding: 8px 12px; border-radius: 9px; border: 1px solid oklch(100% 0 0 / 0.1); background: oklch(14% 0.018 255); color: oklch(96% 0.005 250); font-size: 14px; font-family: ${sans}; }
         .db-search:focus { outline: none; border-color: oklch(72% 0.17 280 / 0.5); }
         @media (max-width: 480px) { .db-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; } }
+        /* The app shell top bar already has a New button on small screens */
+        @media (max-width: 899px) { .db-new-btn.db-topbar-new { display: none !important; } }
       `}</style>
       <OnboardingModal />
 
@@ -511,7 +513,7 @@ export default function Dashboard() {
           )}
         </div>
         <button
-          className="db-new-btn"
+          className="db-new-btn db-topbar-new"
           onClick={() => navigate("/")}
           style={{
             display: "flex", alignItems: "center", gap: 7, padding: "8px 18px",
@@ -576,7 +578,7 @@ export default function Dashboard() {
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setVisibleCount(PAGE_SIZE); }}
               />
-              <div style={{ display: "flex", gap: 6, overflowX: "auto" }} role="group" aria-label="Filter videos">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }} role="group" aria-label="Filter videos">
                 {([
                   ["all", "All"], ["working", "In progress"], ["ready", "Ready"], ["attention", "Needs attention"],
                 ] as [Filter, string][]).map(([key, label]) => (

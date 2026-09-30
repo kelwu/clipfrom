@@ -10,14 +10,14 @@ import { useCredits } from "@/lib/useCredits";
 import { usePreferences } from "@/lib/usePreferences";
 
 const C = {
-  bg: "oklch(14% 0.015 250)",
+  bg: "oklch(10% 0.018 255)",
   accent: "oklch(72% 0.17 280)",
   surface: "oklch(18% 0.015 250)",
   surfaceRaised: "oklch(21% 0.015 250)",
   stroke: "oklch(100% 0 0 / 0.08)",
   strokeMed: "oklch(100% 0 0 / 0.13)",
   fg: "oklch(96% 0.005 250)",
-  fgMuted: "oklch(65% 0.01 250)",
+  fgMuted: "oklch(82% 0.01 250)",
 } as const;
 
 type CaptionStyle = "pill" | "bold" | "lower-third" | "none";
@@ -313,7 +313,7 @@ export default function HighlightPicker() {
                   }}>
                   {/* Index badge */}
                   <div className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                    style={{ background: removed ? C.surface : C.accent, color: removed ? C.fgMuted : "#fff" }}>
+                    style={{ background: removed ? C.surface : C.accent, color: removed ? C.fgMuted : C.bg }}>
                     {seg.segment_index + 1}
                   </div>
 
@@ -410,7 +410,7 @@ export default function HighlightPicker() {
                     className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                     style={{
                       background: brollLayout === bl.value ? C.accent : C.surface,
-                      color: brollLayout === bl.value ? "#fff" : C.fgMuted,
+                      color: brollLayout === bl.value ? C.bg : C.fgMuted,
                       border: `1px solid ${brollLayout === bl.value ? "transparent" : C.stroke}`,
                     }}>
                     {bl.label}
@@ -424,8 +424,8 @@ export default function HighlightPicker() {
           <button
             onClick={handleGenerate}
             disabled={generating || keptCount === 0}
-            className="w-full py-3.5 rounded-2xl font-semibold text-white text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-            style={{ background: C.accent }}>
+            className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            style={{ background: C.accent, color: C.bg }}>
             {generating ? (
               <><Spinner size={16} /> Starting renders…</>
             ) : (

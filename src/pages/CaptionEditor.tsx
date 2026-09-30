@@ -211,9 +211,9 @@ export default function CaptionEditor() {
 
   return (
     <AppShell>
-      <div className="flex flex-col h-full bg-[#0a0a0a] text-white">
+      <div className="flex flex-col h-full bg-cf-deep text-white">
         {/* Top bar */}
-        <div className="border-b border-gray-800 bg-[#0d0d0d] px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 flex-shrink-0">
+        <div className="border-b border-gray-800 bg-cf-sidebar px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 flex-shrink-0">
           <button
             onClick={() => navigate("/dashboard")}
             className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors"
@@ -326,7 +326,7 @@ export default function CaptionEditor() {
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating || enabledCount === 0}
-                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold text-base transition-colors"
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold text-base transition-colors text-cf-deep"
               >
                 {isGenerating ? "Starting…" : "Make my video · 1 credit"}
               </button>

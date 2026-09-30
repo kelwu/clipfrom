@@ -35,13 +35,13 @@ const CAPTION_STYLES = [
 const SILENCE_BUFFER = 4; // frames, mirrors pipeline.ts buildKeepSegments
 
 const C = {
-  bg:            "oklch(14% 0.015 250)",
+  bg:            "oklch(10% 0.018 255)",
   surface:       "oklch(18% 0.015 250)",
   surfaceRaised: "oklch(21% 0.015 250)",
   accent:        "oklch(72% 0.17 280)",
   fg:            "oklch(96% 0.005 250)",
-  fgMuted:       "oklch(65% 0.01 250)",
-  fgDim:         "oklch(45% 0.01 250)",
+  fgMuted:       "oklch(82% 0.01 250)",
+  fgDim:         "oklch(70% 0.01 250)",
   strokeSoft:    "oklch(100% 0 0 / 0.08)",
   strokeMed:     "oklch(100% 0 0 / 0.13)",
   green:         "#10b981",
@@ -93,13 +93,14 @@ function computeKeepSegments(
 
 // ── Toggle component ──────────────────────────────────────────────────────────
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
       type="button"
       onClick={() => onChange(!on)}
       role="switch"
       aria-checked={on}
+      aria-label={label}
       style={{
         width: 44, height: 24, borderRadius: 12, border: "none",
         background: on ? C.orange : C.strokeMed,
@@ -340,7 +341,7 @@ export default function VideoStyle() {
               {CAPTION_STYLES.map(style => {
                 const sel = captionStyle === style.value;
                 return (
-                  <button key={style.value} type="button" onClick={() => setCaptionStyle(style.value)} style={{
+                  <button key={style.value} type="button" aria-pressed={sel} onClick={() => setCaptionStyle(style.value)} style={{
                     padding: "14px 16px",
                     border: `1.5px solid ${sel ? C.accent : C.strokeMed}`,
                     borderRadius: 12,
@@ -372,7 +373,7 @@ export default function VideoStyle() {
                     {fillerList.length} detected (um, uh, like…) · {fillerList.reduce((s, w) => s + (w.endFrame - w.startFrame) / 30, 0).toFixed(1)}s
                   </p>
                 </div>
-                <Toggle on={removeFillers} onChange={v => { setRemoveFillers(v); if (!v) setShowReview(false); }} />
+                <Toggle label="Remove filler words" on={removeFillers} onChange={v => { setRemoveFillers(v); if (!v) setShowReview(false); }} />
               </div>
 
               {/* Expandable review list */}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -47,6 +47,17 @@ interface Props {
 export default function UpgradeModal({ onClose }: Props) {
   const { session } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Dialog basics: focus moves in once on open, Escape closes
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const handleUpgrade = async (planId: string) => {
     if (!session) { toast.error("Please log in first"); return; }
@@ -87,14 +98,15 @@ export default function UpgradeModal({ onClose }: Props) {
       style={{ background: "oklch(10% 0.015 250 / 0.85)", backdropFilter: "blur(8px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+      <div role="dialog" aria-modal="true" aria-labelledby="upgrade-title"
+        className="bg-cf-raised border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-800 flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Upgrade your plan</h2>
+            <h2 id="upgrade-title" className="text-lg font-bold text-white tracking-tight">Upgrade your plan</h2>
             <p className="text-sm text-gray-500 mt-0.5">Credits are added immediately after payment and roll over month to month.</p>
           </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-white transition-colors p-1 ml-4 flex-shrink-0">
+          <button ref={closeRef} onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-white transition-colors p-1 ml-4 flex-shrink-0">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12"/>
             </svg>

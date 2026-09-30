@@ -18,18 +18,32 @@ export default {
     },
     extend: {
       colors: {
+        // Legacy alias: older screens use `emerald-*` classes for the brand color. They map
+        // to Instrument Violet (DESIGN.md), anchored on the real accent at 500.
         emerald: {
-          50:  "#f5f3ff",
-          100: "#ede9fe",
-          200: "#ddd6fe",
-          300: "#c4b5fd",
-          400: "#a78bfa",
-          500: "#8b5cf6",
-          600: "#7c3aed",
-          700: "#6d28d9",
-          800: "#5b21b6",
-          900: "#4c1d95",
-          950: "#2e1065",
+          50:  "oklch(96% 0.03 280)",
+          100: "oklch(92% 0.05 280)",
+          200: "oklch(86% 0.08 280)",
+          300: "oklch(80% 0.12 280)",
+          400: "oklch(76% 0.15 280)",
+          500: "oklch(72% 0.17 280)",
+          600: "oklch(66% 0.17 280)",
+          700: "oklch(56% 0.17 280)",
+          800: "oklch(44% 0.14 280)",
+          900: "oklch(32% 0.1 280)",
+          950: "oklch(22% 0.07 280)",
+        },
+        // DESIGN.md tokens (see src/lib/tokens.ts)
+        cf: {
+          deep: "oklch(10% 0.018 255)",
+          sidebar: "oklch(12% 0.02 258)",
+          surface: "oklch(14% 0.015 250)",
+          raised: "oklch(18% 0.015 250)",
+          lifted: "oklch(21% 0.015 250)",
+          accent: "oklch(72% 0.17 280 / <alpha-value>)",
+          ink: "oklch(96% 0.005 250)",
+          muted: "oklch(82% 0.01 250)",
+          dim: "oklch(70% 0.01 250)",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

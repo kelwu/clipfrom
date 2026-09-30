@@ -22,12 +22,12 @@ const VOICES = [
 ] as const;
 
 const C = {
-  bg:         "oklch(14% 0.015 250)",
+  bg:         "oklch(10% 0.018 255)",
   surface:    "oklch(18% 0.015 250)",
   accent:     "oklch(72% 0.17 280)",
   fg:         "oklch(96% 0.005 250)",
-  fgMuted:    "oklch(65% 0.01 250)",
-  fgDim:      "oklch(45% 0.01 250)",
+  fgMuted:    "oklch(82% 0.01 250)",
+  fgDim:      "oklch(70% 0.01 250)",
   strokeMed:  "oklch(100% 0 0 / 0.13)",
   strokeSoft: "oklch(100% 0 0 / 0.08)",
   green:      "#10b981",
@@ -580,9 +580,10 @@ export default function ClipReview() {
                 const isSelected = selectedVoiceId === v.id;
                 const isPlaying = playingVoiceId === v.id;
                 return (
+                  <span key={v.id} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
                   <button
-                    key={v.id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedVoiceId(v.id)}
                     disabled={rendering || swappingVoice}
                     style={{
@@ -594,17 +595,19 @@ export default function ClipReview() {
                       fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
                     }}>
                     {v.name}
-                    {voicePreviews[v.id] && (
-                      <span
-                        onClick={e => handlePlayPreview(v.id, e)}
-                        title={isPlaying ? "Stop" : "Preview"}
-                        style={{
-                          marginLeft: 2, opacity: 0.55, display: "inline-flex",
-                          alignItems: "center", transition: "opacity 0.1s",
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = isPlaying ? "1" : "0.55")}
-                      >
+                  </button>
+                  {voicePreviews[v.id] && (
+                    <button
+                      type="button"
+                      onClick={e => handlePlayPreview(v.id, e)}
+                      aria-label={isPlaying ? `Stop ${v.name} preview` : `Preview ${v.name}`}
+                      title={isPlaying ? "Stop" : "Preview"}
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 24, height: 24, borderRadius: 6, border: "none", cursor: "pointer",
+                        background: "none", color: isPlaying ? C.accent : C.fgMuted,
+                      }}
+                    >
                         {isPlaying ? (
                           <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
                             <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -614,9 +617,9 @@ export default function ClipReview() {
                             <polygon points="5,3 19,12 5,21"/>
                           </svg>
                         )}
-                      </span>
-                    )}
-                  </button>
+                    </button>
+                  )}
+                  </span>
                 );
               })}
               {/* Cloned voice — no color dot (P2 fix) */}

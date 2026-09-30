@@ -541,7 +541,7 @@ export default function VideoResults() {
 
     return (
       <AppShell>
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-cf-sidebar flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -588,7 +588,7 @@ export default function VideoResults() {
                       {seg.status === "complete" && seg.output_url && (
                         <a href={seg.output_url} download target="_blank" rel="noreferrer"
                           onClick={(e) => { e.preventDefault(); downloadFile(seg.output_url!, `clipfrom-short-${seg.segment_index + 1}.mp4`); }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors">
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold transition-colors text-cf-deep">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           Download
                         </a>
@@ -637,7 +637,7 @@ export default function VideoResults() {
                   type="button"
                   onClick={retryFailedShorts}
                   disabled={retryingShorts}
-                  className="px-4 py-2 rounded-lg bg-violet-500 hover:bg-violet-400 text-sm font-semibold text-gray-950 disabled:opacity-60"
+                  className="px-4 py-2 rounded-lg bg-cf-accent hover:brightness-110 text-sm font-semibold text-gray-950 disabled:opacity-60"
                 >
                   {retryingShorts ? "Starting…" : `Retry ${unfinishedCount === 1 ? "it" : "them"} · 1 credit`}
                 </button>
@@ -671,7 +671,7 @@ export default function VideoResults() {
                 : "Something went wrong while rendering this video. Credits for failed renders are refunded automatically — you can try again from your library."}
             </p>
             <div className="flex gap-3 justify-center pt-2">
-              <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors">
+              <button onClick={() => navigate("/dashboard")} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold transition-colors text-cf-deep">
                 Go to Library
               </button>
               <button onClick={() => navigate("/")} className="px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-500 text-gray-300 text-sm font-semibold transition-colors">
@@ -689,7 +689,7 @@ export default function VideoResults() {
     return (
       <AppShell>
         {/* Top bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-cf-sidebar flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => { clearInterval(pollingRef.current!); navigate("/dashboard"); }} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -867,7 +867,7 @@ export default function VideoResults() {
   return (
     <AppShell>
       {/* Top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-gray-800 bg-cf-sidebar flex-shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/dashboard")} className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5 transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -985,7 +985,7 @@ export default function VideoResults() {
               href={result.stitched_video_url!}
               download
               onClick={(e) => { e.preventDefault(); downloadFile(result.stitched_video_url!, `clipfrom-${projectId}.mp4`); }}
-              className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-sm font-bold transition-colors"
+              className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-sm font-bold transition-colors text-cf-deep"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -1033,7 +1033,7 @@ export default function VideoResults() {
                         </button>
                         <button
                           onClick={handleCopy}
-                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs font-semibold transition-colors"
+                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs font-semibold transition-colors text-cf-deep"
                         >
                           {copied ? "✓ Copied!" : "Copy Caption"}
                         </button>
@@ -1085,7 +1085,7 @@ export default function VideoResults() {
                       <button
                         onClick={handleSaveOutro}
                         disabled={savingOutro}
-                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 rounded-lg text-xs font-semibold transition-colors"
+                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 rounded-lg text-xs font-semibold transition-colors text-cf-deep"
                       >
                         {savingOutro ? "Saving…" : outroSaved ? "✓ Saved!" : "Save"}
                       </button>

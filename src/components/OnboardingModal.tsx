@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -39,6 +39,7 @@ export default function OnboardingModal() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
+  const startRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -64,6 +65,14 @@ export default function OnboardingModal() {
     if (window.location.pathname !== "/") navigate("/");
   };
 
+  useEffect(() => {
+    if (!visible) return;
+    startRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible]);
+
   if (!visible) return null;
 
   return (
@@ -71,7 +80,8 @@ export default function OnboardingModal() {
       style={{ position: "fixed", inset: 0, zIndex: 100, background: "oklch(14% 0.015 250 / 0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
       onClick={(e) => { if (e.target === e.currentTarget) dismiss(); }}
     >
-      <div style={{ background: "oklch(18% 0.015 250)", border: "1px solid oklch(100% 0 0 / 0.1)", borderRadius: 20, padding: "40px 40px 32px", maxWidth: 460, width: "100%", position: "relative" }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="onboarding-title"
+        style={{ background: "oklch(18% 0.015 250)", border: "1px solid oklch(100% 0 0 / 0.1)", borderRadius: 20, padding: "40px 40px 32px", maxWidth: 460, width: "100%", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
         {/* Close */}
         <button
           onClick={dismiss}
@@ -88,7 +98,7 @@ export default function OnboardingModal() {
           <div style={{ width: 44, height: 44, background: "oklch(72% 0.17 280)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="oklch(14% 0.015 250)"><polygon points="6,3 20,12 6,21"/></svg>
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: "oklch(96% 0.005 250)", letterSpacing: "-0.02em", marginBottom: 8 }}>
+          <h2 id="onboarding-title" style={{ fontSize: 22, fontWeight: 800, color: "oklch(96% 0.005 250)", letterSpacing: "-0.02em", marginBottom: 8 }}>
             Welcome to ClipFrom
           </h2>
           <p style={{ fontSize: 14, color: "oklch(65% 0.01 250)", lineHeight: 1.6 }}>
@@ -113,6 +123,7 @@ export default function OnboardingModal() {
 
         {/* CTA */}
         <button
+          ref={startRef}
           onClick={handleStart}
           style={{ width: "100%", padding: "13px 0", background: "oklch(72% 0.17 280)", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, color: "oklch(14% 0.015 250)", cursor: "pointer", letterSpacing: "-0.01em" }}
         >

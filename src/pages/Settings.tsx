@@ -278,7 +278,7 @@ export default function Settings() {
   return (
     <AppShell activePage="Settings">
       {/* Top bar */}
-      <div className="flex items-center px-6 py-3 border-b border-gray-800 bg-[#0d0d0d] flex-shrink-0">
+      <div className="flex items-center px-6 py-3 border-b border-gray-800 bg-cf-sidebar flex-shrink-0">
         <span className="text-sm font-medium text-white">Settings</span>
       </div>
 
@@ -560,11 +560,13 @@ export default function Settings() {
                   const isPlaying = playingVoiceId === voice.id;
                   const hasPreview = !!voicePreviews[voice.id];
                   return (
+                    <div key={voice.id} className="relative">
                     <button
-                      key={voice.id}
+                      type="button"
+                      aria-pressed={isSelected}
                       onClick={() => handleSelectVoice(voice.id)}
                       disabled={savingVoice}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all disabled:opacity-50 ${
+                      className={`w-full flex items-center gap-3 px-3 py-3 pr-10 rounded-xl border text-left transition-all disabled:opacity-50 ${
                         isSelected
                           ? "border-violet-500 bg-violet-500/10"
                           : "border-gray-800 bg-gray-900 hover:border-gray-600"
@@ -581,12 +583,16 @@ export default function Settings() {
                         <p className="text-[10px] text-gray-500 leading-tight truncate">{voice.tone}</p>
                       </div>
                       <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />}
+                      </div>
+                    </button>
                         {hasPreview && (
-                          <span
-                            role="button"
+                          <button
+                            type="button"
                             onClick={e => handlePlayPreview(voice.id, e)}
+                            aria-label={isPlaying ? `Stop ${voice.name} preview` : `Preview ${voice.name}`}
                             title={isPlaying ? "Stop preview" : "Preview voice"}
-                            className="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-white transition-colors"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-white transition-colors"
                           >
                             {isPlaying ? (
                               <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
@@ -597,11 +603,9 @@ export default function Settings() {
                                 <polygon points="5,3 19,12 5,21"/>
                               </svg>
                             )}
-                          </span>
+                          </button>
                         )}
-                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />}
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

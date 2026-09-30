@@ -28,7 +28,7 @@ export default function Features() {
 
         <button
           onClick={() => navigate("/")}
-          className="bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-lg shadow-emerald-500/25"
+          className="bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 shadow-lg shadow-emerald-500/25 text-cf-deep"
         >
           Create Your First Clip
         </button>

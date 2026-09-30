@@ -71,8 +71,8 @@ const C = {
   bg: "oklch(14% 0.015 250)",
   accent: "oklch(72% 0.17 280)",
   fg: "oklch(96% 0.005 250)",
-  fgMuted: "oklch(65% 0.01 250)",
-  fgDim: "oklch(45% 0.01 250)",
+  fgMuted: "oklch(82% 0.01 250)",
+  fgDim: "oklch(70% 0.01 250)",
   strokeSoft: "oklch(100% 0 0 / 0.08)",
   strokeMed: "oklch(100% 0 0 / 0.13)",
   surface: "oklch(18% 0.015 250)",
@@ -516,7 +516,7 @@ const ArticleInput = () => {
   /* ── Loading screen ── */
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center px-4 relative overflow-hidden">
+      <div className="min-h-screen bg-cf-deep text-white flex flex-col items-center justify-center px-4 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 40% at 50% 50%, oklch(72% 0.17 280 / 0.08) 0%, transparent 70%)" }} />
         <div className="relative z-10 w-full max-w-lg text-center">
           {(() => {
@@ -542,8 +542,8 @@ const ArticleInput = () => {
               </>
             );
           })()}
-          <div className="bg-[#0d0d0d] border border-gray-800 rounded-xl overflow-hidden text-left">
-            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-800 bg-[#111]">
+          <div className="bg-cf-sidebar border border-gray-800 rounded-xl overflow-hidden text-left">
+            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-800 bg-cf-raised">
               <span className="text-xs text-gray-500 font-medium select-none">Progress</span>
             </div>
             <div className="p-4 font-mono text-xs space-y-1.5 min-h-[160px]">
@@ -575,6 +575,7 @@ const ArticleInput = () => {
         .cf-step-grid-last { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
         .cf-features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 48px; }
         .cf-footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 48px; margin-bottom: 48px; }
+        label:has(.cf-file-input:focus-visible) { outline: 2px solid oklch(72% 0.17 280); outline-offset: -4px; border-radius: 12px; }
         .cf-own-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
         .cf-presets-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
         .cf-pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
@@ -713,7 +714,7 @@ const ArticleInput = () => {
                         </div>
                       ) : (
                         <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "24px 16px", cursor: "pointer", textAlign: "center" }}>
-                          <input type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" style={{ display: "none" }} onChange={e => setVideoFile(e.target.files?.[0] ?? null)} />
+                          <input type="file" aria-label="Choose a video file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" className="sr-only cf-file-input" onChange={e => setVideoFile(e.target.files?.[0] ?? null)} />
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={videoFile ? C.accent : C.fgMuted} strokeWidth="1.5">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                           </svg>

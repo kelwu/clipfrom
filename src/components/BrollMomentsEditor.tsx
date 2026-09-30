@@ -114,7 +114,7 @@ export default function BrollMomentsEditor({ projectId, plan, accessToken, onPla
                   placeholder="e.g. library shelves"
                   className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-xs text-gray-200"
                 />
-                <button type="submit" disabled={busy !== null} className="px-2 py-1 rounded-md bg-violet-500 text-gray-950 text-xs font-semibold disabled:opacity-60">
+                <button type="submit" disabled={busy !== null} className="px-2 py-1 rounded-md bg-cf-accent text-gray-950 text-xs font-semibold disabled:opacity-60">
                   {busy === i ? "…" : "Find"}
                 </button>
                 <button type="button" onClick={() => setSearchFor(null)} className="text-xs text-gray-500">Cancel</button>
@@ -122,12 +122,12 @@ export default function BrollMomentsEditor({ projectId, plan, accessToken, onPla
             ) : (
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
                 {m.removed ? (
-                  <button type="button" disabled={busy !== null} onClick={() => call(i, { action: "restore" })} className="text-violet-400 hover:text-violet-300">
+                  <button type="button" disabled={busy !== null} onClick={() => call(i, { action: "restore" })} className="text-cf-accent hover:brightness-125">
                     {busy === i ? "Restoring…" : "Restore"}
                   </button>
                 ) : (
                   <>
-                    <button type="button" disabled={busy !== null} onClick={() => call(i, { action: "swap" })} className="text-violet-400 hover:text-violet-300 disabled:opacity-60">
+                    <button type="button" disabled={busy !== null} onClick={() => call(i, { action: "swap" })} className="text-cf-accent hover:brightness-125 disabled:opacity-60">
                       {busy === i ? "Finding…" : "Different clip"}
                     </button>
                     <button type="button" disabled={busy !== null} onClick={() => { setSearchFor(i); setSearchText(m.query); }} className="text-gray-400 hover:text-gray-200">
@@ -150,7 +150,7 @@ export default function BrollMomentsEditor({ projectId, plan, accessToken, onPla
             type="button"
             onClick={onRerender}
             disabled={rerendering || busy !== null}
-            className="w-full py-2.5 rounded-lg bg-violet-500 hover:bg-violet-400 text-sm font-semibold text-gray-950 disabled:opacity-60"
+            className="w-full py-2.5 rounded-lg bg-cf-accent hover:brightness-110 text-sm font-semibold text-gray-950 disabled:opacity-60"
           >
             {rerendering ? "Starting…" : "Re-render with your changes · 1 credit"}
           </button>

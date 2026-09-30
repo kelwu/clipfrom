@@ -32,6 +32,28 @@ interface Segment {
   status: string;
 }
 
+const NUDGE_FRAMES = 5 * 30;
+const MIN_LEN_FRAMES = 15 * 30;
+const MAX_LEN_FRAMES = 120 * 30;
+
+// Plays just one highlight from the source video (stops at its end)
+function SegmentPreview({ src, start, end }: { src: string; start: number; end: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  return (
+    <video
+      ref={ref}
+      src={src}
+      controls
+      playsInline
+      preload="metadata"
+      onLoadedMetadata={() => { if (ref.current) { ref.current.currentTime = start / 30; ref.current.play().catch(() => {}); } }}
+      onTimeUpdate={() => { const v = ref.current; if (v && v.currentTime >= end / 30) { v.pause(); v.currentTime = start / 30; } }}
+      className="w-full rounded-xl mt-3"
+      style={{ maxHeight: 320, background: "#000" }}
+    />
+  );
+}
+
 function frameToTimestamp(frame: number): string {
   const totalSec = Math.round(frame / 30);
   const m = Math.floor(totalSec / 60);
@@ -77,6 +99,11 @@ export default function HighlightPicker() {
   const { outOfCredits } = useCredits();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  // Start/end the user nudged, saved when they generate
+  const [edits, setEdits] = useState<Record<string, { start: number; end: number }>>({});
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const hasFetchedRef = useRef(false);
 
   const { session: _s } = useAuth();
@@ -86,11 +113,15 @@ export default function HighlightPicker() {
     if (!projectId || hasFetchedRef.current) return;
     hasFetchedRef.current = true;
     extractHighlights();
+    supabase.from("ai_generations").select("user_video_url").eq("project_id", projectId).maybeSingle()
+      .then(({ data }) => setSourceUrl(data?.user_video_url ?? null));
   }, [projectId]);
 
-  async function extractHighlights() {
+  // regenerate=false returns the saved picks (reopening never wipes them)
+  async function extractHighlights(regenerate = false) {
     setAnalyzing(true);
     setError(null);
+    setConfirmRegenerate(false);
     try {
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-highlights`,
@@ -101,7 +132,7 @@ export default function HighlightPicker() {
             Authorization: `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ project_id: projectId }),
+          body: JSON.stringify({ project_id: projectId, regenerate }),
         }
       );
       if (!res.ok) {
@@ -110,6 +141,8 @@ export default function HighlightPicker() {
       }
       const { segments: segs } = await res.json() as { segments: Segment[] };
       setSegments(segs.sort((a, b) => a.segment_index - b.segment_index));
+      setRemovedIds(new Set());
+      setEdits({});
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to analyze video";
       setError(msg);
@@ -124,13 +157,20 @@ export default function HighlightPicker() {
     const kept = segments.filter(s => !removedIds.has(s.id));
     if (kept.length === 0) { toast.error("Select at least one highlight to generate"); return; }
 
-    // If user removed some segments, delete them from DB before triggering render
+    // Check credits before touching anything, so the user's picks survive an upgrade detour
+    if (outOfCredits) { setShowUpgrade(true); return; }
+    setGenerating(true);
+
+    // Remove unwanted highlights and save any start/end adjustments
     if (removedIds.size > 0) {
       await supabase.from("video_segments").delete().in("id", [...removedIds]);
     }
-
-    if (outOfCredits) { setShowUpgrade(true); return; }
-    setGenerating(true);
+    for (const seg of kept) {
+      const e = edits[seg.id];
+      if (e && (e.start !== seg.start_frame || e.end !== seg.end_frame)) {
+        await supabase.from("video_segments").update({ start_frame: e.start, end_frame: e.end }).eq("id", seg.id);
+      }
+    }
     try {
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-highlights-render`,
@@ -224,15 +264,36 @@ export default function HighlightPicker() {
             </button>
             <h1 className="text-2xl font-bold text-white mb-1">Pick your highlights</h1>
             <p className="text-sm" style={{ color: C.fgMuted }}>
-              AI picked {segments.length} moments from your video. Remove any you don't want, then generate.
+              AI picked {segments.length} moment{segments.length !== 1 ? "s" : ""} from your video. Preview them, adjust the start or end, and remove any you don't want.
             </p>
+            <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: C.fgMuted }}>
+              {confirmRegenerate ? (
+                <>
+                  <span>Replace these with new picks?</span>
+                  <button type="button" onClick={() => extractHighlights(true)} className="underline" style={{ color: C.accent }}>Yes, find new ones</button>
+                  <button type="button" onClick={() => setConfirmRegenerate(false)} className="underline">Cancel</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => setConfirmRegenerate(true)} className="underline" style={{ color: C.fgMuted }}>
+                  Not quite right? Find different moments
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Segment cards */}
           <div className="space-y-3">
             {segments.map(seg => {
               const removed = removedIds.has(seg.id);
-              const durationSec = Math.round((seg.end_frame - seg.start_frame) / 30);
+              const start = edits[seg.id]?.start ?? seg.start_frame;
+              const end = edits[seg.id]?.end ?? seg.end_frame;
+              const durationSec = Math.round((end - start) / 30);
+              const nudge = (which: "start" | "end", delta: number) => setEdits(prev => {
+                const s2 = which === "start" ? Math.max(0, start + delta) : start;
+                const e2 = which === "end" ? end + delta : end;
+                if (e2 - s2 < MIN_LEN_FRAMES || e2 - s2 > MAX_LEN_FRAMES) return prev;
+                return { ...prev, [seg.id]: { start: s2, end: e2 } };
+              });
               return (
                 <div key={seg.id}
                   className="rounded-2xl p-5 flex items-start gap-4 transition-all"
@@ -256,9 +317,30 @@ export default function HighlightPicker() {
                       </span>
                     </div>
                     <p className="text-xs mt-1" style={{ color: C.fgMuted }}>{seg.summary}</p>
-                    <p className="text-xs mt-2 font-mono" style={{ color: "oklch(55% 0.01 250)" }}>
-                      {frameToTimestamp(seg.start_frame)} – {frameToTimestamp(seg.end_frame)}
-                    </p>
+                    {!removed && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 text-xs font-mono" style={{ color: C.fgMuted }}>
+                        <span className="flex items-center gap-1">
+                          <button type="button" className="px-1.5 py-0.5 rounded" style={{ background: C.surface }} aria-label="Start 5 seconds earlier" onClick={() => nudge("start", -NUDGE_FRAMES)}>−5s</button>
+                          <span>{frameToTimestamp(start)}</span>
+                          <button type="button" className="px-1.5 py-0.5 rounded" style={{ background: C.surface }} aria-label="Start 5 seconds later" onClick={() => nudge("start", NUDGE_FRAMES)}>+5s</button>
+                        </span>
+                        <span>–</span>
+                        <span className="flex items-center gap-1">
+                          <button type="button" className="px-1.5 py-0.5 rounded" style={{ background: C.surface }} aria-label="End 5 seconds earlier" onClick={() => nudge("end", -NUDGE_FRAMES)}>−5s</button>
+                          <span>{frameToTimestamp(end)}</span>
+                          <button type="button" className="px-1.5 py-0.5 rounded" style={{ background: C.surface }} aria-label="End 5 seconds later" onClick={() => nudge("end", NUDGE_FRAMES)}>+5s</button>
+                        </span>
+                        {sourceUrl && (
+                          <button type="button" className="underline font-sans" style={{ color: C.accent }}
+                            onClick={() => setPreviewId(previewId === seg.id ? null : seg.id)}>
+                            {previewId === seg.id ? "Hide preview" : "▶ Preview"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {previewId === seg.id && sourceUrl && !removed && (
+                      <SegmentPreview key={`${start}-${end}`} src={sourceUrl} start={start} end={end} />
+                    )}
                   </div>
 
                   {/* Remove toggle */}
@@ -271,7 +353,9 @@ export default function HighlightPicker() {
                     })}
                     className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
                     style={{ background: C.surface, color: removed ? C.accent : C.fgMuted }}
-                    title={removed ? "Keep this highlight" : "Remove this highlight"}>
+                    title={removed ? "Keep this highlight" : "Remove this highlight"}
+                    aria-label={removed ? "Keep this highlight" : "Remove this highlight"}
+                    aria-pressed={removed}>
                     {removed ? (
                       <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

@@ -91,6 +91,9 @@ export default function VideoResults() {
   const triggeredRef = useRef(false);
   // Non-null once the render fails ("failed") or the client-side poll gives up ("timeout").
   const [renderProblem, setRenderProblem] = useState<null | "failed" | "timeout">(null);
+  const [retryingShorts, setRetryingShorts] = useState(false);
+  // Bumped to restart polling after a retry
+  const [pollKey, setPollKey] = useState(0);
 
   const projectId = location.state?.projectId || projectIdParam;
   const userEmail: string | undefined = location.state?.userEmail ?? user?.email ?? undefined;
@@ -363,7 +366,7 @@ export default function VideoResults() {
       }
     });
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [projectId, sourceMode, navigate]);
+  }, [projectId, sourceMode, navigate, pollKey]);
 
   const handlePostToInstagram = async () => {
     if (!result.stitched_video_url) return;
@@ -461,6 +464,37 @@ export default function VideoResults() {
   const contentPreview = content.length > 200 ? content.slice(0, 200) + "…" : content;
   const firstCaption = displayCaptions[0] || "";
 
+  // Re-render only the highlight shorts that didn't finish (finished ones are kept)
+  const retryFailedShorts = async () => {
+    if (!projectId || !session) return;
+    setRetryingShorts(true);
+    try {
+      const { data: gen } = await supabase.from("ai_generations").select("render_params").eq("project_id", projectId).maybeSingle();
+      const rp = (gen?.render_params ?? {}) as RenderParams;
+      const unfinished = videoSegments.filter(sg => sg.status !== "complete").map(sg => sg.id);
+      await supabase.from("video_segments").update({ status: "pending" }).in("id", unfinished);
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-highlights-render`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({
+          project_id: projectId,
+          captionStyle: rp.captionStyle ?? "pill",
+          broll_layout: rp.brollLayout && rp.brollLayout !== "auto" ? rp.brollLayout : null,
+        }),
+      });
+      if (res.status === 402) { toast.error("You're out of credits — upgrade to retry."); return; }
+      if (res.status === 409) { toast.message("Already rendering — hang tight."); }
+      else if (!res.ok) throw new Error(String(res.status));
+      setRenderProblem(null);
+      setPollKey(k => k + 1);
+      toast.success("Retrying the shorts that didn't finish…");
+    } catch {
+      toast.error("Could not retry — please try again");
+    } finally {
+      setRetryingShorts(false);
+    }
+  };
+
   // ── Neutral loading state until we know what we're showing ─────────────────
   if (!testMode && (!sourceMode || !loaded)) {
     return (
@@ -474,8 +508,10 @@ export default function VideoResults() {
 
   // ── Long video: multi-segment results ────────────────────────────────────────
   if (sourceMode === "long_video") {
-    const allDone = videoSegments.length > 0 && videoSegments.every(s => s.status === "complete" || s.status === "error");
+    // A failed run leaves some shorts stuck at "pending" — treat the run as finished
+    const allDone = videoSegments.length > 0 && (renderProblem === "failed" || videoSegments.every(s => s.status === "complete" || s.status === "error"));
     const anyReady = videoSegments.some(s => s.status === "complete" && s.output_url);
+    const unfinishedCount = videoSegments.filter(s => s.status !== "complete").length;
 
     return (
       <AppShell>
@@ -538,8 +574,9 @@ export default function VideoResults() {
                         "bg-gray-800 text-gray-500"
                       }`}>
                         {seg.status === "complete" ? "Ready" :
-                         seg.status === "error" ? "Error" :
-                         seg.status === "rendering" ? "Rendering…" : "Pending"}
+                         seg.status === "error" ? "Didn't render" :
+                         allDone ? "Didn't render" :
+                         seg.status === "rendering" ? "Rendering…" : "Queued"}
                       </span>
                     </div>
                   </div>
@@ -554,7 +591,7 @@ export default function VideoResults() {
                       />
                     </div>
                   )}
-                  {(seg.status === "rendering" || seg.status === "pending") && (
+                  {!allDone && (seg.status === "rendering" || seg.status === "pending") && (
                     <div className="px-5 py-4 flex items-center gap-3 text-gray-500 text-sm">
                       <Spinner size={14} />
                       {seg.status === "rendering" ? "Rendering…" : "Queued"}
@@ -564,10 +601,21 @@ export default function VideoResults() {
               ))
             )}
 
-            {renderProblem === "failed" && (
-              <p className="text-sm text-red-400">
-                This run didn't complete. Credits for failed runs are refunded automatically — you can try again from your Library.
-              </p>
+            {allDone && unfinishedCount > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4">
+                <p className="text-sm text-gray-300">
+                  {unfinishedCount} short{unfinishedCount !== 1 ? "s" : ""} didn't render.
+                  {renderProblem === "failed" && " Your credit was refunded."}
+                </p>
+                <button
+                  type="button"
+                  onClick={retryFailedShorts}
+                  disabled={retryingShorts}
+                  className="px-4 py-2 rounded-lg bg-violet-500 hover:bg-violet-400 text-sm font-semibold text-gray-950 disabled:opacity-60"
+                >
+                  {retryingShorts ? "Starting…" : `Retry ${unfinishedCount === 1 ? "it" : "them"} · 1 credit`}
+                </button>
+              </div>
             )}
 
             {!anyReady && !allDone && !renderProblem && (

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import AppShell from "@/components/layout/AppShell";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useCredits } from "@/lib/useCredits";
+import { usePreferences } from "@/lib/usePreferences";
 import { supabase } from "@/lib/supabase";
 
 interface Caption {
@@ -154,6 +155,11 @@ export default function CaptionEditor() {
   const [selectedPreset, setSelectedPreset] = useState<PresetId>("viral");
   const { outOfCredits } = useCredits();
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const { prefs } = usePreferences();
+  const [presetTouched, setPresetTouched] = useState(false);
+  useEffect(() => {
+    if (prefs?.articlePreset && !presetTouched) setSelectedPreset(prefs.articlePreset);
+  }, [prefs]);
   const [showHookCard, setShowHookCard] = useState(false);
   const [hookText, setHookText] = useState("");
   const [captionFont, setCaptionFont] = useState("Inter");
@@ -355,7 +361,7 @@ export default function CaptionEditor() {
                     <button
                       key={preset.id}
                       type="button"
-                      onClick={() => setSelectedPreset(preset.id)}
+                      onClick={() => { setPresetTouched(true); setSelectedPreset(preset.id); }}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-150 ${
                         isSelected
                           ? `ring-2 ${preset.ring} ${preset.border} ${preset.bg}`

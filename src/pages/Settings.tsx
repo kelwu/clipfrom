@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { usePreferences, type Preferences } from "@/lib/usePreferences";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
 import UpgradeModal from "@/components/UpgradeModal";
@@ -45,6 +46,11 @@ export default function Settings() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const { prefs, save: savePrefs } = usePreferences();
+  const updatePref = async (patch: Partial<Preferences>) => {
+    const ok = await savePrefs({ ...(prefs ?? {}), ...patch });
+    if (ok) toast.success("Default saved"); else toast.error("Couldn't save that default");
+  };
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [outro, setOutro] = useState("");
   const [editingOutro, setEditingOutro] = useState(false);
@@ -450,6 +456,45 @@ export default function Settings() {
           </Section>
 
           {/* Voice */}
+          <Section title="Defaults for new videos" description="Your usual choices, pre-selected every time. You can still change them per video.">
+            {prefs === null ? (
+              <div className="h-24 bg-gray-900 border border-gray-800 rounded-xl animate-pulse" />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-400 mb-1.5">Article style preset</span>
+                  <select value={prefs.articlePreset ?? "viral"} onChange={e => updatePref({ articlePreset: e.target.value as Preferences["articlePreset"] })}
+                    className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200">
+                    <option value="viral">Viral</option><option value="clean">Clean</option>
+                    <option value="cinematic">Cinematic</option><option value="raw">Raw</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-400 mb-1.5">Caption style (your videos)</span>
+                  <select value={prefs.captionStyle ?? "pill"} onChange={e => updatePref({ captionStyle: e.target.value as Preferences["captionStyle"] })}
+                    className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200">
+                    <option value="pill">Pill</option><option value="bold">Bold</option>
+                    <option value="lower-third">Lower third</option><option value="none">Off</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-medium text-gray-400 mb-1.5">B-roll layout (your videos)</span>
+                  <select value={prefs.brollLayout ?? "auto"} onChange={e => updatePref({ brollLayout: e.target.value })}
+                    className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200">
+                    <option value="auto">Auto (AI)</option><option value="fullscreen">Full screen</option>
+                    <option value="top-three-quarters">Top ¾</option><option value="top-half">Top half</option>
+                    <option value="bottom-third">Bottom third</option><option value="corner">Corner PiP</option>
+                    <option value="floating">Floating</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 self-end cursor-pointer">
+                  <input type="checkbox" checked={!!prefs.removeFillers} onChange={e => updatePref({ removeFillers: e.target.checked })} />
+                  <span className="text-sm text-gray-200">Remove filler words (um, uh)</span>
+                </label>
+              </div>
+            )}
+          </Section>
+
           <Section title="Voiceover" description="Choose the voice used for all your videos. Generate a test video after selecting to hear it.">
             {profile === null ? (
               <div className="grid grid-cols-2 gap-2">

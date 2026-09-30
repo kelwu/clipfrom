@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
+import UpgradeModal from "@/components/UpgradeModal";
 import { ESTIMATES } from "@/lib/estimates";
 import { isFailedStatus, isRenderingStatus } from "@/lib/status";
 
@@ -55,6 +56,8 @@ export default function ClipReview() {
   const { session, user } = useAuth();
 
   const [captions, setCaptions] = useState<string[]>([]);
+  // The user's edits to the script lines (null = unchanged); applied with the voiceover
+  const [draftLines, setDraftLines] = useState<string[] | null>(null);
   const [clipUrls, setClipUrls] = useState<(string | null)[]>([]);
   const [brollCues, setBrollCues] = useState<BrollCue[]>([]);
   const [captionTimings, setCaptionTimings] = useState<number[] | undefined>(undefined);
@@ -84,6 +87,9 @@ export default function ClipReview() {
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
   const [clonedVoice, setClonedVoice] = useState<{ id: string; name: string } | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  // No unrefunded credit on this project (e.g. a re-render after a failure) → rendering costs 1
+  const [renderCostsCredit, setRenderCostsCredit] = useState(false);
   const [swappingVoice, setSwappingVoice] = useState(false);
   const [voiceSwapped, setVoiceSwapped] = useState(false);
   const [voicePreviews, setVoicePreviews] = useState<Record<string, string>>({});
@@ -94,7 +100,7 @@ export default function ClipReview() {
     if (!projectId) return;
     supabase
       .from("ai_generations")
-      .select("caption_options, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, broll_cues, status, safe_caption_timings, word_timings, render_params")
+      .select("caption_options, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, broll_cues, status, safe_caption_timings, word_timings, render_params, credit_charged_at")
       .eq("project_id", projectId)
       .maybeSingle()
       .then(({ data }) => {
@@ -111,6 +117,7 @@ export default function ClipReview() {
         if (Array.isArray(data.safe_caption_timings)) setCaptionTimings(data.safe_caption_timings);
         if (Array.isArray(data.word_timings)) setWordTimings(data.word_timings);
         if (data.render_params) setRenderParams(data.render_params);
+        setRenderCostsCredit(!data.credit_charged_at);
         // Coming back while the final render is running: show that, not the Render button again
         if (isRenderingStatus(data.status)) {
           setRendering(true);
@@ -235,8 +242,13 @@ export default function ClipReview() {
     setPreviousUrls(prev => { const n = new Map(prev); n.delete(idx); return n; });
   };
 
+  const linesDirty = !!draftLines && draftLines.some((l, i) => l.trim() !== (captions[i] ?? ""));
+  const voiceDirty = selectedVoiceId !== currentVoiceId;
+
+  // Re-records the voiceover with the chosen voice and/or the edited lines (free, ~20s)
   const handleSwapVoice = async () => {
-    if (!projectId || swappingVoice || selectedVoiceId === currentVoiceId) return;
+    if (!projectId || swappingVoice || (!voiceDirty && !linesDirty)) return;
+    if (linesDirty && draftLines!.some(l => !l.trim())) { toast.error("Lines can't be empty"); return; }
     setSwappingVoice(true);
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -248,7 +260,11 @@ export default function ClipReview() {
           "Authorization": `Bearer ${session?.access_token ?? anonKey}`,
           "apikey": anonKey,
         },
-        body: JSON.stringify({ project_id: projectId, voice_id: selectedVoiceId }),
+        body: JSON.stringify({
+          project_id: projectId,
+          voice_id: selectedVoiceId,
+          ...(linesDirty ? { captions: draftLines!.map(l => l.trim()) } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -256,9 +272,10 @@ export default function ClipReview() {
         return;
       }
       setCurrentVoiceId(selectedVoiceId);
+      if (linesDirty) { setCaptions(draftLines!.map(l => l.trim())); setDraftLines(null); }
       setVoiceSwapped(true);
       setTimeout(() => setVoiceSwapped(false), 4000);
-      toast.success("Voice updated — hit Render to use it");
+      toast.success("Voiceover updated — hit Render to use it");
     } catch {
       toast.error("Could not reach server");
     } finally {
@@ -306,6 +323,7 @@ export default function ClipReview() {
         },
         body: JSON.stringify({ project_id: projectId }),
       });
+      if (res.status === 402) { setShowUpgrade(true); setRendering(false); return; }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         toast.error(body?.error ?? "Failed to start render");
@@ -340,7 +358,8 @@ export default function ClipReview() {
   const readyCount = clipUrls.filter(Boolean).length;
   const failedCount = failedClips.size;
   const clipCount = captions.length || clipUrls.length || 5;
-  const allReady = clipCount > 0 && readyCount >= clipCount && failedCount === 0;
+  // Edited lines must be recorded before rendering, or the audio wouldn't match the text
+  const allReady = clipCount > 0 && readyCount >= clipCount && failedCount === 0 && !linesDirty;
 
   // Status indicator config
   const statusColor = failedCount > 0 ? C.red : allReady ? C.green : C.amber;
@@ -397,7 +416,7 @@ export default function ClipReview() {
               </button>
             </div>
             <p style={{ color: C.fgDim, fontSize: 14, margin: "8px 0 0" }}>
-              Swap any clip before rendering.
+              Edit any line, swap any clip, or change the voice before rendering.
             </p>
             {aiFallbackCount > 0 && (
               <div role="status" style={{
@@ -469,10 +488,22 @@ export default function ClipReview() {
                     )}
                   </div>
 
-                  {/* Caption */}
-                  <p style={{ fontSize: 11, color: C.fgMuted, lineHeight: 1.4, margin: 0 }}>
-                    {captions[i] ?? ""}
-                  </p>
+                  {/* Script line — editable; applied with the voiceover */}
+                  <textarea
+                    aria-label={`Line ${i + 1}`}
+                    value={(draftLines ?? captions)[i] ?? ""}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setDraftLines(prev => (prev ?? captions).map((l, j) => (j === i ? v : l)));
+                    }}
+                    disabled={rendering || swappingVoice}
+                    rows={3}
+                    style={{
+                      width: "100%", resize: "vertical", fontSize: 11, lineHeight: 1.4, fontFamily: "inherit",
+                      color: C.fg, background: "transparent", borderRadius: 6, padding: "4px 6px",
+                      border: `1px solid ${draftLines && draftLines[i] !== captions[i] ? C.accent : "transparent"}`,
+                    }}
+                  />
 
                   {/* Swap / Retry button */}
                   <button
@@ -609,8 +640,8 @@ export default function ClipReview() {
                 );
               })()}
             </div>
-            {/* Apply button — visible only when selection differs from current */}
-            {selectedVoiceId !== currentVoiceId && (
+            {/* Apply bar — visible when the voice or any line changed */}
+            {(voiceDirty || linesDirty) && (
               <div style={{ marginTop: 12 }}>
                 <button
                   onClick={handleSwapVoice}
@@ -633,7 +664,7 @@ export default function ClipReview() {
                       </svg>
                       Regenerating audio…
                     </>
-                  ) : "Apply voice change"}
+                  ) : linesDirty ? "Update voiceover with your edits" : "Apply voice change"}
                 </button>
                 <span style={{ marginLeft: 12, fontSize: 11, color: C.fgDim }}>
                   ~20 sec · no credits charged
@@ -666,7 +697,7 @@ export default function ClipReview() {
               /* P0: Confirmation step */
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
                 <p style={{ margin: 0, color: C.fgMuted, fontSize: 13 }}>
-                  This starts the final render (usually {ESTIMATES.articleRender}). Ready to go?
+                  This starts the final render (usually {ESTIMATES.articleRender}){renderCostsCredit && !isAdmin ? " and uses 1 credit" : ""}. Ready to go?
                 </p>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <button
@@ -700,7 +731,9 @@ export default function ClipReview() {
             ) : (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
                 <p style={{ margin: 0, color: C.fgDim, fontSize: 13 }}>
-                  Happy with all {clipCount} clips? Render to get your final 9:16 MP4.
+                  {linesDirty
+                    ? "Update the voiceover (above) to use your edited lines, then render."
+                    : `Happy with all ${clipCount} clips? Render to get your final 9:16 MP4.`}
                 </p>
                 <button
                   onClick={handleRenderClick}
@@ -723,6 +756,7 @@ export default function ClipReview() {
           </div>
         </div>
       </div>
+      {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
     </AppShell>
   );
 }

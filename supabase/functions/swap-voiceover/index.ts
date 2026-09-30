@@ -13,7 +13,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { project_id, voice_id } = await req.json();
+    // captions (optional): the user's edited script lines, one per clip
+    const { project_id, voice_id, captions } = await req.json();
     if (!project_id) {
       return new Response(JSON.stringify({ error: "project_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -35,7 +36,7 @@ Deno.serve(async (req) => {
 
     const [{ data: project }, { data: gen }] = await Promise.all([
       supabaseAdmin.from("projects").select("user_id").eq("id", project_id).maybeSingle(),
-      supabaseAdmin.from("ai_generations").select("id, caption_options").eq("project_id", project_id).maybeSingle(),
+      supabaseAdmin.from("ai_generations").select("id, caption_options, status").eq("project_id", project_id).maybeSingle(),
     ]);
 
     if (!project || project.user_id !== user.id) {
@@ -47,6 +48,25 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "No captions found for this project" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // The audio can't change under a render that's already using it
+    if (gen.status !== "videos_ready" && gen.status !== "clips_ready") {
+      return new Response(JSON.stringify({ error: "This video is rendering or already finished — changes aren't possible now." }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Edited lines: same count as the clips (they map 1:1), non-empty, reasonable length
+    let lines: string[] = gen.caption_options as string[];
+    if (captions !== undefined) {
+      const cleaned = Array.isArray(captions) ? captions.map((c) => (typeof c === "string" ? c.trim() : "")) : [];
+      if (cleaned.length !== lines.length || cleaned.some((c) => !c || c.length > 400)) {
+        return new Response(JSON.stringify({ error: `Provide ${lines.length} non-empty lines of at most 400 characters` }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      lines = cleaned;
     }
 
     // Only platform voices or the caller's own cloned voice — never another user's clone.
@@ -72,7 +92,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         ai_gen_id: gen.id,
-        captions: gen.caption_options,
+        captions: lines,
         ...(voice_id ? { voice_id } : {}),
       }),
     });
@@ -93,6 +113,7 @@ Deno.serve(async (req) => {
         safe_caption_timings: caption_timings,
         word_timings,
         audio_duration_secs: audio_duration_seconds,
+        ...(captions !== undefined ? { caption_options: lines } : {}),
       })
       .eq("project_id", project_id);
 

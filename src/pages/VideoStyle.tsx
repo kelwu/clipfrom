@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Player } from "@remotion/player";
 import AppShell from "@/components/layout/AppShell";
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { ESTIMATES } from "@/lib/estimates";
 import { useCredits } from "@/lib/useCredits";
+import { usePreferences } from "@/lib/usePreferences";
 import UpgradeModal from "@/components/UpgradeModal";
 import BrollLayoutIcon from "@/components/BrollLayoutIcon";
 import { UserVideoCaption } from "@/remotion/UserVideoCaption";
@@ -140,6 +143,21 @@ export default function VideoStyle() {
   const [showReview,      setShowReview]      = useState(false);
   const [saving,          setSaving]          = useState(false);
 
+  // Start from the defaults chosen in Settings (applied once, when they load)
+  const { prefs } = usePreferences();
+  const prefsApplied = useRef(false);
+  useEffect(() => {
+    if (!prefs || prefsApplied.current) return;
+    prefsApplied.current = true;
+    if (prefs.captionStyle) setCaptionStyle(prefs.captionStyle);
+    if (prefs.brollLayout) setBrollLayout(prefs.brollLayout as BrollLayout | "auto");
+    if (prefs.removeFillers !== undefined) setRemoveFillers(prefs.removeFillers);
+  }, [prefs]);
+  // Transcript fixes: word position (among word tokens) → corrected text, saved on generate
+  const [wordFixes,       setWordFixes]       = useState<Record<number, string>>({});
+  const [editingWord,     setEditingWord]     = useState<number | null>(null);
+  const [showTranscript,  setShowTranscript]  = useState(false);
+
   useEffect(() => {
     if (!projectId) return;
     supabase
@@ -156,7 +174,15 @@ export default function VideoStyle() {
       });
   }, [projectId]);
 
-  // Derived
+  // Derived — the preview uses the corrected words straight away
+  const previewWords = Object.keys(wordFixes).length === 0 ? transcriptWords : (() => {
+    let n = -1;
+    return transcriptWords.map(w => {
+      if (w.type !== "word") return w;
+      n++;
+      return wordFixes[n] !== undefined ? { ...w, word: wordFixes[n] } : w;
+    });
+  })();
   const wordsOnly  = transcriptWords.filter(w => w.type === "word");
   const fillerList = wordsOnly.map((w, idx) => ({ ...w, wordIdx: idx })).filter(f => f.is_filler);
   const activeFillerCount   = fillerList.filter(f => !overrides.has(f.wordIdx)).length;
@@ -185,12 +211,29 @@ export default function VideoStyle() {
     });
 
   const { outOfCredits } = useCredits();
+  const { session } = useAuth();
   const [showUpgrade, setShowUpgrade] = useState(false);
 
   const handleGenerate = async () => {
     if (!projectId) return;
     if (outOfCredits) { setShowUpgrade(true); return; }
     setSaving(true);
+    const edits = Object.entries(wordFixes)
+      .filter(([i, w]) => w.trim() && w.trim() !== wordsOnly[Number(i)]?.word)
+      .map(([i, w]) => ({ index: Number(i), word: w.trim() }));
+    if (edits.length > 0) {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-transcript`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ project_id: projectId, edits }),
+      }).catch(() => null);
+      if (!res?.ok) {
+        const body = await res?.json().catch(() => ({}));
+        toast.error(body?.error ?? "Couldn't save your word fixes — please try again.");
+        setSaving(false);
+        return;
+      }
+    }
     await supabase
       .from("ai_generations")
       .update({
@@ -234,7 +277,7 @@ export default function VideoStyle() {
                 component={UserVideoCaption}
                 inputProps={{
                   videoUrl,
-                  transcriptWords,
+                  transcriptWords: previewWords,
                   brollSegments: [],
                   captionStyle: captionStyle as "pill" | "bold" | "lower-third" | "none",
                   keepSegments,
@@ -408,6 +451,61 @@ export default function VideoStyle() {
               <p style={{ margin: 0, fontSize: 13, color: "#fca5a5", lineHeight: 1.5 }}>
                 <strong>This removes {removalPct}% of your video.</strong> Uncheck some fillers above to keep more of your content.
               </p>
+            </div>
+          )}
+
+          {/* Fix misheard words */}
+          {wordsOnly.length > 0 && (
+            <div style={{ marginBottom: 20, background: C.surface, border: `1px solid ${C.strokeMed}`, borderRadius: 12 }}>
+              <button type="button" onClick={() => setShowTranscript(v => !v)} aria-expanded={showTranscript}
+                style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", color: C.fg, cursor: "pointer", textAlign: "left" }}>
+                <span>
+                  <span style={{ display: "block", fontWeight: 600, fontSize: 14 }}>Fix misheard words</span>
+                  <span style={{ display: "block", color: C.fgDim, fontSize: 12, marginTop: 2 }}>
+                    {Object.keys(wordFixes).length > 0
+                      ? `${Object.keys(wordFixes).length} fix${Object.keys(wordFixes).length !== 1 ? "es" : ""} — saved when you make the video`
+                      : "Names and jargon sometimes come out wrong. Click a word to correct it."}
+                  </span>
+                </span>
+                <span style={{ color: C.fgMuted, fontSize: 12 }}>{showTranscript ? "Hide" : "Show"}</span>
+              </button>
+              {showTranscript && (
+                <div style={{ padding: "0 16px 16px", maxHeight: 260, overflowY: "auto", lineHeight: 2, fontSize: 13 }}>
+                  {wordsOnly.map((w, i) => editingWord === i ? (
+                    <input
+                      key={i}
+                      autoFocus
+                      aria-label={`Correct "${w.word}"`}
+                      defaultValue={wordFixes[i] ?? w.word}
+                      onBlur={e => {
+                        const v = e.target.value.trim();
+                        setWordFixes(prev => {
+                          const next = { ...prev };
+                          if (!v || v === w.word) delete next[i]; else next[i] = v.slice(0, 40);
+                          return next;
+                        });
+                        setEditingWord(null);
+                      }}
+                      onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur(); }}
+                      style={{ width: Math.max(40, (wordFixes[i] ?? w.word).length * 9), background: C.bg, color: C.fg, border: `1px solid ${C.accent}`, borderRadius: 4, padding: "0 4px", marginRight: 4, fontSize: 13 }}
+                    />
+                  ) : (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setEditingWord(i)}
+                      title="Click to correct"
+                      style={{
+                        background: wordFixes[i] !== undefined ? "oklch(72% 0.17 280 / 0.15)" : "none",
+                        border: "none", padding: "0 2px", marginRight: 2, borderRadius: 3, cursor: "text",
+                        color: wordFixes[i] !== undefined ? C.accent : C.fgMuted, fontSize: 13,
+                      }}
+                    >
+                      {wordFixes[i] ?? w.word}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

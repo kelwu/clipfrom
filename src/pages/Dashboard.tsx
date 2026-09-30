@@ -375,6 +375,14 @@ export default function Dashboard() {
       navigate("/");
       return;
     }
+    // Article whose final render failed: the clips and voiceover are fine — go back to
+    // review and render again instead of regenerating (and re-paying for) every clip
+    if (mode === "article" && status === "remotion_error" && p.ai_generations?.video_url_1) {
+      await supabase.from("ai_generations").update({ status: "videos_ready", debug_log: null }).eq("project_id", p.id);
+      toast.message("Your clips are still here — review them and render again.");
+      navigate(`/review/${p.id}`);
+      return;
+    }
     setRetrying(p.id);
     try {
       const { error: resetError } = await supabase

@@ -22,7 +22,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { project_id, captionStyle = "pill" } = await req.json();
+    // keep_plan: re-render with the b-roll the user edited on the results page
+    const { project_id, captionStyle = "pill", keep_plan = false } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -91,7 +92,9 @@ Deno.serve(async (req) => {
     const { data: claimed } = await supabaseAdmin
       .from("ai_generations")
       .update({
-        status: "generating_broll", stitched_video_url: null, broll_plan: null, debug_log: null,
+        status: "generating_broll", stitched_video_url: null, debug_log: null,
+        // A fresh render (e.g. after changing the style) gets a fresh AI plan
+        ...(keep_plan ? {} : { broll_plan: null }),
         // Lets the refund trigger return this credit exactly once if the render fails
         ...(creditDecremented ? { credit_charged_at: new Date().toISOString() } : {}),
       })

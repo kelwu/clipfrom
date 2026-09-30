@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useCredits } from "@/lib/useCredits";
+import { usePreferences } from "@/lib/usePreferences";
 
 const C = {
   bg: "oklch(14% 0.015 250)",
@@ -98,6 +99,14 @@ export default function HighlightPicker() {
   const [generating, setGenerating] = useState(false);
   const { outOfCredits } = useCredits();
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const { prefs } = usePreferences();
+  const prefsApplied = useRef(false);
+  useEffect(() => {
+    if (!prefs || prefsApplied.current) return;
+    prefsApplied.current = true;
+    if (prefs.captionStyle) setCaptionStyle(prefs.captionStyle);
+    if (prefs.brollLayout) setBrollLayout(prefs.brollLayout as BrollLayout);
+  }, [prefs]);
   const [error, setError] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);

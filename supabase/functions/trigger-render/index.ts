@@ -45,17 +45,39 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { data: prior } = await supabase
+      .from("ai_generations").select("status, credit_charged_at").eq("project_id", project_id).maybeSingle();
+    if (!prior || !["videos_ready", "clips_ready"].includes(prior.status ?? "")) {
+      return new Response(JSON.stringify({ error: "This video is already rendering or isn't ready to render" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // The render is covered by the credit charged when the clips were made. If that credit
+    // was already used (a finished render) or refunded (a failed one), rendering again costs
+    // a credit — otherwise resetting a project's status would give free renders.
+    const { data: profile } = await supabase
+      .from("user_profiles").select("credits_remaining, is_admin").eq("id", user.id).maybeSingle();
+    const needsCharge = !profile?.is_admin && !prior.credit_charged_at;
+    if (needsCharge) {
+      const { data: newCredits } = await supabase.rpc("decrement_credit", { uid: user.id });
+      if (newCredits === null || newCredits === undefined) {
+        return new Response(JSON.stringify({ error: "no_credits" }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Atomically claim the render: only one request can move the job out of the ready state,
     // so a double-click or retry can't launch two Lambda renders.
-    const { data: prior } = await supabase
-      .from("ai_generations").select("status").eq("project_id", project_id).maybeSingle();
     const { data: claimed } = await supabase
       .from("ai_generations")
-      .update({ status: "render_queued" })
+      .update({ status: "render_queued", ...(needsCharge ? { credit_charged_at: new Date().toISOString() } : {}) })
       .eq("project_id", project_id)
       .in("status", ["videos_ready", "clips_ready"])
       .select("id");
     if (!claimed || claimed.length === 0) {
+      if (needsCharge) await supabase.rpc("increment_credit", { uid: user.id });
       return new Response(JSON.stringify({ error: "This video is already rendering or isn't ready to render" }), {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -70,7 +92,8 @@ Deno.serve(async (req) => {
 
     if (!pipelineRes.ok) {
       const errText = await pipelineRes.text();
-      // Release the claim so the user can try again.
+      // Release the claim so the user can try again (any credit stays stamped, so the
+      // next attempt isn't charged twice).
       await supabase.from("ai_generations")
         .update({ status: prior?.status ?? "videos_ready" })
         .eq("project_id", project_id).eq("status", "render_queued");

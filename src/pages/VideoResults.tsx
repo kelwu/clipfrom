@@ -7,6 +7,7 @@ import AppShell from "@/components/layout/AppShell";
 import { ESTIMATES } from "@/lib/estimates";
 import { isFailedStatus, isRenderingStatus } from "@/lib/status";
 import { useCredits } from "@/lib/useCredits";
+import BrollMomentsEditor, { type BrollPlan } from "@/components/BrollMomentsEditor";
 
 interface RenderParams {
   captionStyle?: string;
@@ -37,6 +38,7 @@ interface ResultData {
   status?: string | null;
   render_params?: RenderParams | null;
   broll_count?: number | null;
+  broll_plan?: BrollPlan | null;
 }
 
 const Spinner = ({ size = 14 }: { size?: number }) => (
@@ -92,6 +94,7 @@ export default function VideoResults() {
   // Non-null once the render fails ("failed") or the client-side poll gives up ("timeout").
   const [renderProblem, setRenderProblem] = useState<null | "failed" | "timeout">(null);
   const [retryingShorts, setRetryingShorts] = useState(false);
+  const [rerendering, setRerendering] = useState(false);
   // Bumped to restart polling after a retry
   const [pollKey, setPollKey] = useState(0);
 
@@ -318,7 +321,7 @@ export default function VideoResults() {
       try {
         const { data } = await supabase
           .from("ai_generations")
-          .select("id, stitched_video_url, caption_options, final_caption, description, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, status, render_params, broll_count")
+          .select("id, stitched_video_url, caption_options, final_caption, description, video_urls, video_url_1, video_url_2, video_url_3, video_url_4, video_url_5, status, render_params, broll_count, broll_plan")
           .eq("project_id", projectId).maybeSingle();
         setLoaded(true);
         if (!data) return false;
@@ -463,6 +466,29 @@ export default function VideoResults() {
 
   const contentPreview = content.length > 200 ? content.slice(0, 200) + "…" : content;
   const firstCaption = displayCaptions[0] || "";
+
+  // Re-render a talking-head video with the b-roll the user edited (plan kept as-is)
+  const rerenderWithEdits = async () => {
+    if (!projectId || !session) return;
+    setRerendering(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/trigger-caption-video`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
+        body: JSON.stringify({ project_id: projectId, captionStyle, keep_plan: true }),
+      });
+      if (res.status === 402) { toast.error("You're out of credits — upgrade to re-render."); return; }
+      if (res.status === 409) { toast.message("Already rendering — hang tight."); return; }
+      if (!res.ok) throw new Error(String(res.status));
+      setResult(r => ({ ...r, stitched_video_url: null, status: "generating_broll" }));
+      setVideoDuration(null);
+      setPollKey(k => k + 1);
+    } catch {
+      toast.error("Could not start the re-render — please try again");
+    } finally {
+      setRerendering(false);
+    }
+  };
 
   // Re-render only the highlight shorts that didn't finish (finished ones are kept)
   const retryFailedShorts = async () => {
@@ -907,6 +933,20 @@ export default function VideoResults() {
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row">
+        {/* ── B-roll editor (talking-head videos) ── */}
+        {sourceMode === "video" && result.broll_plan && session && (
+        <div className="order-2 lg:order-none w-full lg:w-72 flex-shrink-0 border-t lg:border-t-0 lg:border-r border-gray-800 lg:overflow-y-auto">
+          <BrollMomentsEditor
+            projectId={projectId}
+            plan={result.broll_plan}
+            accessToken={session.access_token}
+            onPlanChange={plan => setResult(r => ({ ...r, broll_plan: plan }))}
+            onRerender={rerenderWithEdits}
+            rerendering={rerendering}
+          />
+        </div>
+        )}
+
         {/* ── Script (articles only) ── */}
         {sourceMode !== "video" && displayCaptions.length > 0 && (
         <div className="order-2 lg:order-none w-full lg:w-72 flex-shrink-0 border-t lg:border-t-0 lg:border-r border-gray-800 lg:overflow-y-auto">

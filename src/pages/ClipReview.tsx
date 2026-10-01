@@ -9,7 +9,7 @@ import { ESTIMATES } from "@/lib/estimates";
 import { isFailedStatus, isRenderingStatus } from "@/lib/status";
 
 // requested/error are set by the pipeline when an AI (Kling) clip fell back to stock
-interface BrollCue { index: number; source: "kling" | "pexels" | null; requested?: "kling" | "pexels"; error?: string; url: string | null; }
+interface BrollCue { index: number; source: "kling" | "runway" | "pexels" | null; requested?: "kling" | "pexels"; error?: string; url: string | null; }
 
 // The founder's cloned voice — only shown to admins.
 const OWNER_VOICE_ID = "KXOzch1bNSOicTxNAakl";
@@ -36,16 +36,17 @@ const C = {
   amber:      "oklch(75% 0.17 75)",
 } as const;
 
-const SourceBadge = ({ source }: { source: "kling" | "pexels" | null }) => {
+const SourceBadge = ({ source }: { source: "kling" | "runway" | "pexels" | null }) => {
+  const ai = source === "kling" || source === "runway";
   if (!source) return null;
   return (
     <span style={{
       fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
       padding: "2px 6px", borderRadius: 4,
-      background: source === "kling" ? "oklch(55% 0.2 280 / 0.25)" : "oklch(55% 0.1 160 / 0.25)",
-      color: source === "kling" ? "#a78bfa" : "#34d399",
+      background: ai ? "oklch(55% 0.2 280 / 0.25)" : "oklch(55% 0.1 160 / 0.25)",
+      color: ai ? "#a78bfa" : "#34d399",
     }}>
-      {source === "kling" ? "AI Clip" : "Stock"}
+      {ai ? "AI Clip" : "Stock"}
     </span>
   );
 };
